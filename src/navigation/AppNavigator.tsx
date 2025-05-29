@@ -1,25 +1,38 @@
 // src/navigation/AppNavigator.tsx
 import { NavigationContainer } from "@react-navigation/native";
 import React from "react";
-import { ActivityIndicator, View } from "react-native"; // For loading state
-import { useAuth } from "../context/AuthContext"; // Import useAuth
-import { colors } from "../theme"; // Assuming you have theme colors
+import { ActivityIndicator, View } from "react-native";
+import { useSelector } from "react-redux"; // <<< IMPORT useSelector
+import { RootState } from "../store/store"; // <<< IMPORT RootState
+import { colors } from "../theme";
 import AdminAppNavigator from "./AdminAppNavigator";
 import AuthNavigator from "./AuthNavigator";
 import OwnerAppNavigator from "./OwnerAppNavigator";
 import UserAppNavigator from "./UserAppNavigator";
+// import { useAuth } from "../context/AuthContext"; // <<< REMOVE or comment out if Redux is the sole source of truth for navigation state
 
 const AppNavigator: React.FC = () => {
-	const { isAuthenticated, user, isLoading } = useAuth();
-
-	if (isLoading) {
+	// Select authentication state directly from the Redux store
+	const {
+		isAuthenticated,
+		user,
+		isRestoringToken, // This flag from authSlice is crucial for initial loading
+	} = useSelector((state: RootState) => state.auth);
+	console.log("AppNavigator Redux State:", {
+		isAuthenticated,
+		userRole: user?.role,
+		isRestoringToken,
+	});
+	// Use isRestoringToken from Redux to determine initial app loading state
+	if (isRestoringToken) {
+		// This will wait for Redux authSlice.restoreToken to complete
 		return (
 			<View
 				style={{
 					flex: 1,
 					justifyContent: "center",
 					alignItems: "center",
-					backgroundColor: colors.white,
+					backgroundColor: colors.white, // Make sure colors.white is defined
 				}}>
 				<ActivityIndicator size="large" color={colors.primary} />
 			</View>
@@ -28,11 +41,11 @@ const AppNavigator: React.FC = () => {
 
 	return (
 		<NavigationContainer>
-			{isAuthenticated ? (
-				user?.role === "Admin" ? (
-					<AdminAppNavigator /> // Check user role
-				) : user?.role === "Owner" ? (
-					<OwnerAppNavigator /> // TODO: Create OwnerAppNavigator
+			{isAuthenticated && user ? ( // Check Redux state: user object also exists
+				user.role === "Admin" ? (
+					<AdminAppNavigator />
+				) : user.role === "Owner" ? (
+					<OwnerAppNavigator />
 				) : (
 					<UserAppNavigator />
 				)

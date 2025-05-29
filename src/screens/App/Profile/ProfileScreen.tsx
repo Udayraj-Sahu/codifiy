@@ -13,7 +13,7 @@ import {
 	View,
 } from "react-native";
 // Assuming ProfileStackParamList, UserTabParamList, DocumentStackParamList are correctly defined
-import  PrimaryButton from "../../../components/common/PrimaryButton"; // For "Upload/Update Document" & "Logout"
+import PrimaryButton from "../../../components/common/PrimaryButton"; // For "Upload/Update Document" & "Logout"
 import { useAuth } from "../../../context/AuthContext"; // To get user data and logout
 import {
 	ProfileStackParamList,
@@ -167,10 +167,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 	};
 
 	const handleUploadDocument = () => {
-		// Navigate to the Documents tab, then to the DocumentUploadScreen
-		navigation.navigate("DocumentsTab", {
-			screen: "DocumentUploadScreen",
-			params: { isVerificationRequired: true }, // Example param
+		// Navigate to DocumentUploadScreen within the ProfileStack
+		navigation.navigate("DocumentUploadScreen", {
+			// Assuming it's now in ProfileStack
+			isVerificationRequired: true,
 		});
 	};
 
@@ -178,7 +178,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 		// Navigate to the MyRentalsScreen (which was previously in RentalsTab)
 		// Assuming MyRentalsScreen is now part of ProfileStack or another accessible stack
 		// For now, let's assume we'll add it to ProfileStackParamList
-		navigation.navigate('MyRentalsScreen')
+		navigation.navigate("MyRentalsScreen");
 	};
 
 	const handleLogout = () => {

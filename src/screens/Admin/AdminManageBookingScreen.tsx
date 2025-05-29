@@ -211,7 +211,7 @@ const AdminBookingCard: React.FC<AdminBookingCardProps> = ({
 
 			<View style={styles.bikeInfoSection}>
 				<Text style={styles.bikeName}>
-					{item.bikeName}{" "}
+					{item.bikeName}
 					<Text style={styles.bikeIdText}>({item.bikeId})</Text>
 				</Text>
 				<View style={styles.dateRow}>

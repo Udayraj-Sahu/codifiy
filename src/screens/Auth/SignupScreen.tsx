@@ -121,10 +121,10 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 
 	const termsAndPolicyLabel = (
 		<Text style={styles.checkboxLabelText}>
-			I agree to Bikya's{" "}
+			I agree to Bikya's
 			<Text style={styles.linkTextUnderlined} onPress={handleTermsPress}>
 				terms&
-			</Text>{" "}
+			</Text>
 			<Text
 				style={styles.linkTextUnderlined}
 				onPress={handlePrivacyPolicyPress}>
@@ -227,7 +227,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 					
 					<View style={styles.footer}>
 						<Text style={styles.footerText}>
-							Already have an account?{" "}
+							Already have an account?
 						</Text>
 						<TouchableOpacity
 							onPress={() => navigation.navigate("Login")}>

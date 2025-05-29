@@ -251,7 +251,7 @@ const RideDetailsScreen: React.FC<RideDetailsScreenProps> = ({
 					style={styles.bikeImage}
 				/>
 				<Text style={styles.bikeName}>
-					{ride.bikeName}{" "}
+					{ride.bikeName}
 					<Text style={styles.bikeModelYear}>
 						({ride.bikeModelYear || "N/A"})
 					</Text>

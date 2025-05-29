@@ -7,7 +7,7 @@ import {
 	createStackNavigator,
 	StackNavigationOptions,
 } from "@react-navigation/stack";
-import React from "react";
+import React ,{useMemo} from "react";
 import { Text } from "react-native"; // For placeholder icons
 
 import HomeScreen from "../screens/App/Home/HomeScreen"; // NEW
@@ -20,8 +20,8 @@ import BikeDetailsScreen from "../screens/App/Explore/BikeDetailsScreen";
 import ExploreScreen from "../screens/App/Explore/ExploreScreen";
 import FilterScreen from "../screens/App/Explore/FilterScreen";
 // Ensure these paths are correct for your project:
-import NotificationsScreen from '../screens/App/Home/NotificationsScreen';
 import DocumentUploadScreen from "../screens/App/Documents/DocumentUploadScreen";
+import NotificationsScreen from "../screens/App/Home/NotificationsScreen";
 import EditProfileScreen from "../screens/App/Profile/EditProfileScreen";
 import ProfileScreen from "../screens/App/Profile/ProfileScreen";
 import SettingsScreen from "../screens/App/Profile/SettingScreen"; // Corrected to SettingsScreen
@@ -186,6 +186,11 @@ const ProfileStackNavigator: React.FC = () => (
 			name="MyRentalsScreen"
 			component={MyRentalsScreen}
 			options={{ title: "My Rentals" }} // Title for the MyRentalsScreen header
+		/>
+		<ProfileStack.Screen
+			name="DocumentUploadScreen" // Added here
+			component={DocumentUploadScreen}
+			options={{ title: "Upload Document" }} // Or can be set dynamically in the screen
 		/>
 	</ProfileStack.Navigator>
 );

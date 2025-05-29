@@ -98,27 +98,52 @@ exports.getAllBikes = async (req, res) => {
 		console.error("Error fetching bikes:", err.message);
 		res.status(500).send("Server error");
 	}
+	if (req.query.search) {
+		const searchTerm = { $regex: req.query.search, $options: "i" };
+		filter.$or = [
+			// Search across multiple fields
+			{ model: searchTerm },
+			{ category: searchTerm },
+			{ description: searchTerm }, // Add if you have a description field
+		];
+	}
+	// For priceMin, priceMax, minRating, add to the filter object:
+	if (req.query.priceMin) {
+		filter.pricePerHour = {
+			...filter.pricePerHour,
+			$gte: parseFloat(req.query.priceMin),
+		};
+	}
+	if (req.query.priceMax) {
+		filter.pricePerHour = {
+			...filter.pricePerHour,
+			$lte: parseFloat(req.query.priceMax),
+		};
+	}
+	if (req.query.minRating) {
+		// This assumes your Bike model has an 'averageRating' field
+		filter.averageRating = { $gte: parseFloat(req.query.minRating) };
+	}
 };
 
 // Get a single bike by ID
 exports.getBikeById = async (req, res) => {
-	const errors = validationResult(req);
+	const errors = validationResult(req); // Ensure validationResult is imported if you use it here
 	if (!errors.isEmpty()) {
 		return res.status(400).json({ errors: errors.array() });
 	}
 	try {
 		const bike = await Bike.findById(req.params.id).populate(
-			"addedBy",
+			"addedBy", // Optional: if you want to show who added the bike
 			"fullName email"
 		);
 		if (!bike) {
 			return res.status(404).json({ msg: "Bike not found" });
 		}
-		res.status(200).json(bike);
+		res.status(200).json(bike); // Returns the bike object directly
 	} catch (err) {
 		console.error("Error fetching bike by ID:", err.message);
 		if (err.kind === "ObjectId") {
-			// Handle invalid ObjectId format for ID
 			return res
 				.status(404)
 				.json({ msg: "Bike not found (invalid ID format)" });

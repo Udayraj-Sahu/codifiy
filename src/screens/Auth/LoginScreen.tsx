@@ -13,9 +13,12 @@ import {
 } from "react-native";
 import PrimaryButton from "../../components/common/PrimaryButton";
 import StyledTextInput from "../../components/common/StyledTextInput"; // Adjust path
-import { useAuth } from "../../context/AuthContext"; // Adjust path
+//import { useAuth } from "../../context/AuthContext"; // Adjust path
 import { AuthStackParamList } from "../../navigation/types"; // Adjust path if needed
 import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
+import { useDispatch } from 'react-redux'; // <<< ADD
+import { AppDispatch } from '../../store/store'; // <<< ADD
+import { loginUser } from '../../store/slices/authSlice';
 
 // Placeholder for Social Login Button
 const SocialButton: React.FC<{
@@ -46,7 +49,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoggingIn, setIsLoggingIn] = useState(false);
-	const { signIn } = useAuth();
+	//const { signIn } = useAuth();
+	const dispatch = useDispatch<AppDispatch>();
 
 	const handleLogin = async () => {
 		if (!email.trim() || !password.trim()) {
@@ -57,17 +61,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 			return;
 		}
 		setIsLoggingIn(true);
-		const result = await signIn(email, password);
-		setIsLoggingIn(false);
+		  try {
+            // const result = await signIn(email, password); // <<< OLD WAY
+            const resultAction = await dispatch(loginUser({ email, password })); // <<< NEW WAY
 
-		if (!result.success) {
-			Alert.alert(
-				"Login Failed",
-				result.error || "Invalid email or password. Please try again."
-			);
-		}
-		// Successful login will automatically navigate due to AppNavigator's state change
-	};
+            if (loginUser.fulfilled.match(resultAction)) {
+                // Navigation will be handled automatically by AppNavigator
+                // because isAuthenticated in Redux authSlice will become true.
+                // No need to explicitly navigate here if AppNavigator is set up correctly.
+                console.log("Login successful via Redux");
+            } else if (loginUser.rejected.match(resultAction)) {
+                Alert.alert(
+                    "Login Failed",
+                    (resultAction.payload as string) || "Invalid email or password. Please try again."
+                );
+            }
+        } catch (error: any) {
+            Alert.alert("Login Error", error.message || "An unexpected error occurred.");
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
 
 	const handleGoogleLogin = () => {
 		// TODO: Implement Google Sign-In
@@ -97,7 +111,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 					<View style={styles.logoContainer}>
 				
 						<View style={styles.logoCircle}>
-							<Text style={styles.logoIcon}>🚲</Text>{" "}
+							<Text style={styles.logoIcon}>🚲</Text>
 					
 						</View>
 						<Text style={styles.appName}>Bikya</Text>
@@ -187,7 +201,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 			
 					<View style={styles.footer}>
 						<Text style={styles.footerText}>
-							Don't have an account?{" "}
+							Don't have an account?
 						</Text>
 						<TouchableOpacity
 							onPress={() => navigation.navigate("Signup")}>

@@ -8,12 +8,13 @@ import {
 	TextInput,
 	TouchableOpacity,
 	View,
-	Alert,
 } from "react-native";
 import { AdminStackParamList } from "../../navigation/types"; // Adjust path
 import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
 // import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // For actual icons
-import { useAuth } from '../../context/AuthContext';
+import { useDispatch } from "react-redux"; // <<< 1. IMPORT useDispatch
+import { logoutUser } from "../../store/slices/authSlice";
+import { AppDispatch } from "../../store/store"; // <<< 2. IMPORT AppDispatch (adjust path as needed)
 // --- Types and Dummy Data ---
 interface StatisticItem {
 	id: string;
@@ -131,7 +132,7 @@ interface AdminDashboardScreenProps {
 const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 	navigation,
 }) => {
-	const { signOut, user } = useAuth();
+	const dispatch = useDispatch<AppDispatch>();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [stats, setStats] = useState<StatisticItem[]>(DUMMY_STATS);
 	const [recentActivity, setRecentActivity] = useState<ActivityItem[]>(
@@ -194,22 +195,8 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 		}
 	};
 	const handleLogout = () => {
-		Alert.alert(
-			"Logout",
-			"Are you sure you want to log out of the admin panel?",
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Logout",
-					style: "destructive",
-					onPress: async () => {
-						console.log("Admin logging out...");
-						await signOut();
-						// AppNavigator will automatically redirect to Auth flow
-					},
-				},
-			]
-		);
+		console.log("Attempting to dispatch logoutUser..."); // <<< ADD LOG
+		dispatch(logoutUser());
 	};
 
 	return (

@@ -90,3 +90,77 @@ export const getAdminBikes = async (
 
 // TODO: Add service functions for addBike, updateBike, deleteBike, getBikeById later
 // These will need to handle FormData for image uploads.
+
+export const addBikeAPI = async (
+	bikeData: FormData,
+	token: string | null // <<< Receives token here
+): Promise<Bike> => {
+	if (!token) {
+		// <<< THIS IS LIKELY WHERE THE ERROR IS THROWN
+		throw new Error("Authentication token not provided.");
+	}
+	const response = await fetch(`${ADMIN_API_BASE_URL}/bikes`, {
+		// POST to /api/bikes
+		method: "POST",
+		headers: {
+			// 'Content-Type': 'multipart/form-data' is automatically set by browser/fetch when FormData is used
+			Authorization: `Bearer ${token}`,
+		},
+		body: bikeData,
+	});
+	return handleAdminResponse(response); // This should parse the created bike
+};
+
+// Function to update an existing bike (Admin)
+export const updateBikeAPI = async (
+	bikeId: string,
+	bikeData: FormData, // Use FormData for potential image updates
+	token: string | null
+): Promise<Bike> => {
+	if (!token) {
+		throw new Error("Authentication token not provided.");
+	}
+	const response = await fetch(
+		`<span class="math-inline">\{ADMIN\_API\_BASE\_URL\}/bikes/</span>{bikeId}`,
+		{
+			method: "PUT",
+			headers: {
+				Authorization: `Bearer ${token}`,
+			},
+			body: bikeData,
+		}
+	);
+	return handleAdminResponse(response);
+};
+
+// Function to delete a bike (Admin)
+export const deleteBikeAPI = async (
+	bikeId: string,
+	token: string | null
+): Promise<{ success: boolean; msg?: string }> => {
+	// Backend returns { msg: "..." }
+	if (!token) {
+		throw new Error("Authentication token not provided.");
+	}
+	const response = await fetch(
+		`<span class="math-inline">\{ADMIN\_API\_BASE\_URL\}/bikes/</span>{bikeId}`,
+		{
+			method: "DELETE",
+			headers: {
+				Authorization: `Bearer ${token}`,
+			},
+		}
+	);
+	// handleAdminResponse might need adjustment if delete doesn't return a bike object
+	// or create a specific handler for delete responses.
+	// For now, assuming it returns a success message.
+	if (!response.ok) {
+		const errorData = await response
+			.json()
+			.catch(() => ({ msg: "Failed to delete bike" }));
+		throw new Error(
+			errorData.msg || `HTTP error! status: ${response.status}`
+		);
+	}
+	return response.json(); // Expects { success: true, msg: "..." }
+};

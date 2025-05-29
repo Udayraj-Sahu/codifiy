@@ -194,7 +194,7 @@ const OwnerBookingCard: React.FC<OwnerBookingCardProps> = ({
 
 			<View style={styles.bikeInfoSection}>
 				<Text style={styles.bikeName}>
-					{item.bikeName}{" "}
+					{item.bikeName}
 					<Text style={styles.bikeIdText}>({item.bikeId})</Text>
 				</Text>
 				<View style={styles.dateRow}>
@@ -400,8 +400,8 @@ const OwnerManageBookingsScreen: React.FC<OwnerManageBookingsScreenProps> = ({
 
 // Styles will be very similar to AdminManageBookingsScreen, with minor tweaks if needed
 // Ensure you have ownerBlue and ownerBlueLight in your theme or use existing colors
-const ownerAccentColor =  "#1A5276"; // Example blue for Owner section accents
-const ownerAccentColorLight =  "#D6EAF8";
+const ownerAccentColor = "#1A5276"; // Example blue for Owner section accents
+const ownerAccentColorLight = "#D6EAF8";
 
 const styles = StyleSheet.create({
 	screenContainer: {

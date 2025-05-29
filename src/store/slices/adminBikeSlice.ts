@@ -50,6 +50,21 @@ const initialState: AdminBikeState = {
 	isLoading: false,
 	error: null,
 };
+export interface AdminBikeFormData {
+	// FormData will be used for the actual API call,
+	// but the thunk might receive a structured object first.
+	model: string;
+	category: string;
+	pricePerHour: string; // Keep as string for form input, convert before API if needed
+	pricePerDay: string;
+	longitude: string;
+	latitude: string;
+	address?: string;
+	availability?: boolean;
+	description?: string;
+	bikeImages?: File[]; // For new images
+	imagesToDeletePublicIds?: string[]; // For images to remove
+}
 
 // Async Thunk to fetch bikes for admin
 export const fetchAdminBikes = createAsyncThunk<
@@ -85,7 +100,70 @@ export const fetchAdminBikes = createAsyncThunk<
 		);
 	}
 });
+export const addAdminBike = createAsyncThunk<
+	Bike,
+	FormData,
+	{ rejectValue: string; state: RootState }
+>("adminBikes/addAdminBike", async (bikeFormData, thunkAPI) => {
+	console.log("adminBikeSlice: addAdminBike thunk started");
+	try {
+		const token = thunkAPI.getState().auth.token; // Token is accessed here
+		console.log("adminBikeSlice: Token in addAdminBike:", token); // Your log shows this is null
+		if (!token) {
+			// This is the message you are seeing, or similar if you modified it
+			return thunkAPI.rejectWithValue(
+				"Token not found in Redux state for addAdminBike."
+			);
+		}
+		const newBike = await adminBikeService.addBikeAPI(bikeFormData, token);
+		// ...
+		return newBike;
+	} catch (error: any) {
+		// ...
+		return thunkAPI.rejectWithValue(
+			error.response?.data?.message ||
+				error.message ||
+				"Failed to add bike"
+		);
+	}
+});
+export const updateAdminBike = createAsyncThunk<
+	Bike,
+	{ bikeId: string; bikeFormData: FormData },
+	{ rejectValue: string; state: RootState }
+>("adminBikes/updateAdminBike", async ({ bikeId, bikeFormData }, thunkAPI) => {
+	try {
+		const token = thunkAPI.getState().auth.token;
+		const updatedBike = await adminBikeService.updateBikeAPI(
+			bikeId,
+			bikeFormData,
+			token
+		);
+		// thunkAPI.dispatch(fetchAdminBikes()); // Re-fetch all bikes or update locally
+		return updatedBike;
+	} catch (error: any) {
+		return thunkAPI.rejectWithValue(
+			error.message || "Failed to update bike"
+		);
+	}
+});
 // TODO: Add thunks for addBike, updateBike, deleteBike, fetchBikeById later
+export const deleteAdminBike = createAsyncThunk<
+	string, // Return the bikeId of the deleted bike on success
+	string, // Argument: bikeId to delete
+	{ rejectValue: string; state: RootState }
+>("adminBikes/deleteAdminBike", async (bikeId, thunkAPI) => {
+	try {
+		const token = thunkAPI.getState().auth.token;
+		await adminBikeService.deleteBikeAPI(bikeId, token);
+		// thunkAPI.dispatch(fetchAdminBikes()); // Re-fetch bikes after deletion
+		return bikeId; // Return bikeId to identify which bike was removed in the reducer
+	} catch (error: any) {
+		return thunkAPI.rejectWithValue(
+			error.message || "Failed to delete bike"
+		);
+	}
+});
 
 const adminBikeSlice = createSlice({
 	name: "adminBikes",
@@ -97,34 +175,123 @@ const adminBikeSlice = createSlice({
 		},
 	},
 	extraReducers: (builder) => {
-  builder
-    .addCase(fetchAdminBikes.pending, (state) => {
-      console.log('--- adminBikeSlice: fetchAdminBikes.pending ---'); // Optional: confirm pending
-      state.isLoading = true;
-      state.error = null;
-    })
-    .addCase(fetchAdminBikes.fulfilled, (state, action: PayloadAction<{ data: Bike[]; pagination: PaginationInfo }>) => {
-      // --- ADD THESE LOGS ---
-      console.log('--- adminBikeSlice: fetchAdminBikes.fulfilled --- EXECUTING');
-      console.log('Fulfilled Payload:', JSON.stringify(action.payload, null, 2));
-      // --- END ADD THESE LOGS ---
+		builder
+			.addCase(fetchAdminBikes.pending, (state) => {
+				console.log("--- adminBikeSlice: fetchAdminBikes.pending ---"); // Optional: confirm pending
+				state.isLoading = true;
+				state.error = null;
+			})
+			.addCase(
+				fetchAdminBikes.fulfilled,
+				(
+					state,
+					action: PayloadAction<{
+						data: Bike[];
+						pagination: PaginationInfo;
+					}>
+				) => {
+					// --- ADD THESE LOGS ---
+					console.log(
+						"--- adminBikeSlice: fetchAdminBikes.fulfilled --- EXECUTING"
+					);
+					console.log(
+						"Fulfilled Payload:",
+						JSON.stringify(action.payload, null, 2)
+					);
+					// --- END ADD THESE LOGS ---
 
-      state.isLoading = false;
-      state.bikes = action.payload.data;
-      state.pagination = action.payload.pagination;
-      state.error = null;
+					state.isLoading = false;
+					state.bikes = action.payload.data;
+					state.pagination = action.payload.pagination;
+					state.error = null;
 
-      // --- ADD THESE LOGS TO SEE THE NEW STATE ---
-      console.log('Fulfilled - New state.isLoading:', state.isLoading);
-      console.log('Fulfilled - New state.bikes.length:', state.bikes.length);
-      // --- END ADD THESE LOGS ---
-    })
-    .addCase(fetchAdminBikes.rejected, (state, action: PayloadAction<string | undefined>) => {
-      console.log('--- adminBikeSlice: fetchAdminBikes.rejected ---', action.payload); // Optional: confirm rejected
-      state.isLoading = false;
-      state.error = action.payload || 'An unknown error occurred';
-    });
-},
+					// --- ADD THESE LOGS TO SEE THE NEW STATE ---
+					console.log(
+						"Fulfilled - New state.isLoading:",
+						state.isLoading
+					);
+					console.log(
+						"Fulfilled - New state.bikes.length:",
+						state.bikes.length
+					);
+					// --- END ADD THESE LOGS ---
+				}
+			)
+			.addCase(
+				fetchAdminBikes.rejected,
+				(state, action: PayloadAction<string | undefined>) => {
+					console.log(
+						"--- adminBikeSlice: fetchAdminBikes.rejected ---",
+						action.payload
+					); // Optional: confirm rejected
+					state.isLoading = false;
+					state.error = action.payload || "An unknown error occurred";
+				}
+			)
+			// addAdminBike cases
+			.addCase(addAdminBike.pending, (state) => {
+				state.isLoading = true; // Or a specific isLoadingForAdd flag
+				state.error = null;
+			})
+			.addCase(
+				addAdminBike.fulfilled,
+				(state, action: PayloadAction<Bike>) => {
+					state.isLoading = false;
+					// Add the new bike to the list or rely on a re-fetch
+					state.bikes.unshift(action.payload); // Add to the beginning
+					if (state.pagination) state.pagination.totalBikes += 1;
+				}
+			)
+			.addCase(addAdminBike.rejected, (state, action) => {
+				state.isLoading = false;
+				state.error = action.payload || "Failed to add bike.";
+			})
+
+			// updateAdminBike cases
+			.addCase(updateAdminBike.pending, (state) => {
+				state.isLoading = true;
+				state.error = null;
+			})
+			.addCase(
+				updateAdminBike.fulfilled,
+				(state, action: PayloadAction<Bike>) => {
+					state.isLoading = false;
+					const index = state.bikes.findIndex(
+						(bike) => bike._id === action.payload._id
+					);
+					if (index !== -1) {
+						state.bikes[index] = action.payload;
+					}
+					if (state.bikeDetails?._id === action.payload._id) {
+						state.bikeDetails = action.payload;
+					}
+				}
+			)
+			.addCase(updateAdminBike.rejected, (state, action) => {
+				state.isLoading = false;
+				state.error = action.payload || "Failed to update bike.";
+			})
+
+			// deleteAdminBike cases
+			.addCase(deleteAdminBike.pending, (state) => {
+				state.isLoading = true; // Or a specific isLoadingForDelete flag
+				state.error = null;
+			})
+			.addCase(
+				deleteAdminBike.fulfilled,
+				(state, action: PayloadAction<string>) => {
+					state.isLoading = false;
+					state.bikes = state.bikes.filter(
+						(bike) => bike._id !== action.payload
+					);
+					if (state.pagination) state.pagination.totalBikes -= 1;
+				}
+			)
+			.addCase(deleteAdminBike.rejected, (state, action) => {
+				state.isLoading = false;
+				state.error = action.payload || "Failed to delete bike.";
+			});
+	},
 });
 
 export const { clearAdminBikeError } = adminBikeSlice.actions;

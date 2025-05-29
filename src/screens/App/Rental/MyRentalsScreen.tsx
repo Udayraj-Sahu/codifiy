@@ -268,10 +268,10 @@ const MyRentalsScreen: React.FC<MyRentalsScreenProps> = ({ navigation }) => {
 			{rentals.length === 0 && !loading ? (
 				<View style={styles.centered}>
 					<Text style={styles.noRentalsText}>
-						No{" "}
+						No
 						{activeFilter !== "All"
 							? activeFilter.toLowerCase()
-							: ""}{" "}
+							: ""}
 						rentals found.
 					</Text>
 				</View>

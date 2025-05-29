@@ -228,7 +228,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({ route, navigation }) => {
 				/>
 				<View style={styles.bikeInfoContainer}>
 					<Text style={styles.bikeName}>
-						{bike.name}{" "}
+						{bike.name}
 						<Text style={styles.bikeModelYear}>
 							• {bike.modelYear}
 						</Text>
@@ -255,7 +255,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({ route, navigation }) => {
 					<View>
 						<Text style={styles.dateTimeLabel}>Start Date</Text>
 						<Text style={styles.dateTimeValue}>
-							{rentalStartDate.toLocaleDateString()} •{" "}
+							{rentalStartDate.toLocaleDateString()} 
 							{rentalStartDate.toLocaleTimeString([], {
 								hour: "2-digit",
 								minute: "2-digit",
@@ -265,7 +265,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({ route, navigation }) => {
 					<View>
 						<Text style={styles.dateTimeLabel}>End Date</Text>
 						<Text style={styles.dateTimeValue}>
-							{rentalEndDate.toLocaleDateString()} •{" "}
+							{rentalEndDate.toLocaleDateString()} •
 							{rentalEndDate.toLocaleTimeString([], {
 								hour: "2-digit",
 								minute: "2-digit",
@@ -351,7 +351,7 @@ const BookingScreen: React.FC<BookingScreenProps> = ({ route, navigation }) => {
 				<Checkbox
 					label={
 						<Text style={styles.checkboxLabelText}>
-							I agree to Bikya's{" "}
+							I agree to Bikya's
 							<Text style={styles.linkText}>
 								Terms & Conditions
 							</Text>

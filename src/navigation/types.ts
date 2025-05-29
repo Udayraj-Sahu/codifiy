@@ -62,16 +62,7 @@ export type RentalsStackParamList = {
 };
 
 // == Documents Tab ==
-export type DocumentStackParamList = {
-	DocumentUploadScreen:
-		| {
-				// Params object for this route is optional
-				documentType?: "driversLicense" | "idCard";
-				isVerificationRequired?: boolean;
-		  }
-		| undefined;
-	// DocumentViewerScreen?: { documentUri: string };
-};
+
 export type DocumentStatusAdmin = "pending" | "approved" | "rejected" | "all";
 
 export type AdminStackParamList = {
@@ -123,6 +114,11 @@ export type ProfileStackParamList = {
 	ContactSupportScreen: undefined;
 	WebViewScreen?: { title: string; url?: string; content?: string };
 	AboutScreen?: undefined;
+	DocumentUploadScreen?: {
+		// <<< ADD THIS
+		documentType?: "driversLicense" | "idCard";
+		isVerificationRequired?: boolean;
+	};
 };
 
 export type BookingStatusOwnerView =
@@ -176,17 +172,20 @@ export type UserTabParamList = {
 
 // Define the specific prop types that DocumentUploadScreen can receive
 export type DocumentUploadScreenNavigationProp =
-	| StackNavigationProp<DocumentStackParamList, "DocumentUploadScreen">
 	| StackNavigationProp<
 			ExploreStackParamList,
 			"DocumentUploadScreen_FromExplore"
-	  >;
+	  >
+	// | StackNavigationProp<DocumentStackParamList, 'DocumentUploadScreen'> // If DocumentStack is fully removed for user
+	| StackNavigationProp<ProfileStackParamList, "DocumentUploadScreen">; // ADDED
 
 export type DocumentUploadScreenRouteProp =
-	| RouteProp<DocumentStackParamList, "DocumentUploadScreen">
-	| RouteProp<ExploreStackParamList, "DocumentUploadScreen_FromExplore">;
+	| RouteProp<ExploreStackParamList, "DocumentUploadScreen_FromExplore">
+	// | RouteProp<DocumentStackParamList, 'DocumentUploadScreen'>
+	| RouteProp<ProfileStackParamList, "DocumentUploadScreen">; // ADDED
 
 export interface DocumentUploadScreenProps {
+	// This interface is used by DocumentUploadScreen.tsx
 	navigation: DocumentUploadScreenNavigationProp;
 	route: DocumentUploadScreenRouteProp;
 }

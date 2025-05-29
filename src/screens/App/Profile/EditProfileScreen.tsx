@@ -250,7 +250,6 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
 				keyboardType="phone-pad"
 				containerStyle={styles.inputContainer}
 			/>
-		
 
 			<PrimaryButton
 				title={isSubmitting ? "Saving..." : "Save Changes"}

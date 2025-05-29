@@ -53,16 +53,23 @@ export const loginUser = createAsyncThunk<
 	LoginCredentials,
 	{ rejectValue: string }
 >("auth/login", async (credentials, { rejectWithValue }) => {
+	console.log(
+		"authSlice: loginUser thunk started with credentials:",
+		credentials
+	); // <<< ADD LOG
 	try {
 		const response = await authService.login(
 			credentials.email,
 			credentials.password
 		);
+		console.log(
+			"authSlice: loginUser thunk - authService.login response:",
+			response
+		); // <<< ADD LOG
 		await SecureStore.setItemAsync(TOKEN_KEY, response.token);
-		await SecureStore.setItemAsync(USER_KEY, JSON.stringify(response.user)); // Store user data
+		await SecureStore.setItemAsync(USER_KEY, JSON.stringify(response.user));
 		return response;
 	} catch (error: any) {
-		// ... (error handling)
 		let errorMessage = "Login failed. Please try again.";
 		if (
 			error.response &&
@@ -73,6 +80,7 @@ export const loginUser = createAsyncThunk<
 		} else if (error.message) {
 			errorMessage = error.message;
 		}
+		console.error("authSlice: loginUser thunk error:", errorMessage, error); // <<< ADD LOG
 		return rejectWithValue(errorMessage);
 	}
 });
@@ -107,6 +115,19 @@ export const signupUser = createAsyncThunk<
 		return rejectWithValue(errorMessage);
 	}
 });
+export const logoutUser = createAsyncThunk(
+	"auth/logout",
+	async (_, { dispatch }) => {
+		console.log("authSlice: logoutUser thunk started"); // <<< ADD THIS LOG
+		dispatch(clearCredentials()); // This is the important part
+		console.log(
+			"authSlice: clearCredentials action dispatched from logoutUser thunk"
+		); // <<< ADD THIS LOG
+		// No backend call needed for stateless JWT logout usually.
+		// Clear from SecureStore is handled in clearCredentials reducer
+		return undefined;
+	}
+);
 
 // --- New: Async Thunk to Restore Token ---
 export const restoreToken = createAsyncThunk<
@@ -154,39 +175,61 @@ const authSlice = createSlice({
 			state.error = null;
 		},
 		clearCredentials(state) {
+			console.log(
+				"authSlice: clearCredentials reducer called. Current state before clear:",
+				JSON.stringify(state)
+			); // <<< ADD LOG
 			state.user = null;
 			state.token = null;
 			state.isAuthenticated = false;
 			state.error = null;
-			state.isRestoringToken = false;
+			state.isRestoringToken = false; // Important: after logout, we're not in a restoring phase
 			SecureStore.deleteItemAsync(TOKEN_KEY);
-			// SecureStore.deleteItemAsync(USER_KEY);
+			SecureStore.deleteItemAsync(USER_KEY); // If you store user data separately
+			console.log(
+				"authSlice: state AFTER clearCredentials:",
+				JSON.stringify(state)
+			); // <<< ADD LOG
 		},
 	},
 	extraReducers: (builder) => {
 		builder
 			// Login cases
 			.addCase(loginUser.pending, (state) => {
-				/* ... */ state.isLoading = true;
+				console.log("authSlice: loginUser.pending"); // <<< ADD LOG
+				state.isLoading = true;
 				state.error = null;
 			})
 			.addCase(
 				loginUser.fulfilled,
 				(state, action: PayloadAction<AuthResponse>) => {
+					console.log(
+						"authSlice: loginUser.fulfilled, payload:",
+						action.payload
+					); // <<< ADD LOG
 					state.isLoading = false;
 					state.isAuthenticated = true;
 					state.user = action.payload.user;
 					state.token = action.payload.token;
 					state.error = null;
-					state.isRestoringToken = false;
-					// SecureStore saving is now handled within the loginUser thunk itself
+					state.isRestoringToken = false; // Login means session is active
+					console.log(
+						"authSlice: new auth state after login:",
+						JSON.stringify(state)
+					); // <<< ADD LOG
 				}
 			)
 			.addCase(loginUser.rejected, (state, action) => {
-				/* ... */ state.isLoading = false;
-				state.error = null;
+				console.error(
+					"authSlice: loginUser.rejected, error:",
+					action.payload
+				); // <<< ADD LOG
+				state.isLoading = false;
+				state.error = (action.payload as string) || "Login failed";
 				state.isAuthenticated = false;
 				state.isRestoringToken = false;
+				state.user = null;
+				state.token = null;
 			})
 			// Signup cases
 			.addCase(signupUser.pending, (state) => {
@@ -213,47 +256,65 @@ const authSlice = createSlice({
 			})
 			// Restore Token cases
 			.addCase(restoreToken.pending, (state) => {
+				console.log(
+					"authSlice: restoreToken.pending. Current isRestoringToken:",
+					state.isRestoringToken
+				); // Log current
 				state.isRestoringToken = true;
+				console.log(
+					"authSlice: restoreToken.pending. New isRestoringToken:",
+					state.isRestoringToken
+				); // Log new
 			})
 			.addCase(
 				restoreToken.fulfilled,
 				(state, action: PayloadAction<AuthResponse | null>) => {
+					console.log(
+						"authSlice: restoreToken.fulfilled. Payload:",
+						action.payload
+					);
 					if (action.payload) {
 						state.user = action.payload.user;
 						state.token = action.payload.token;
 						state.isAuthenticated = true;
 					} else {
-						// No valid session found or restored
 						state.user = null;
 						state.token = null;
 						state.isAuthenticated = false;
 					}
-					state.isRestoringToken = false;
-					state.error = null; // Clear any previous errors
+					state.isRestoringToken = false; // <<< CRITICAL
+					state.error = null;
+					console.log(
+						"authSlice: restoreToken.fulfilled. New isRestoringToken:",
+						state.isRestoringToken
+					); // Log new
+					console.log(
+						"authSlice: Fulfilled auth state:",
+						JSON.stringify(state)
+					);
 				}
 			)
 			.addCase(restoreToken.rejected, (state, action) => {
-				state.isRestoringToken = false;
+				console.error(
+					"authSlice: restoreToken.rejected. Payload:",
+					action.payload
+				);
+				state.isRestoringToken = false; // <<< CRITICAL
 				state.isAuthenticated = false;
 				state.user = null;
 				state.token = null;
 				state.error = action.payload || "Failed to restore session.";
-				// Token is already cleared in the thunk on failure
+				console.log(
+					"authSlice: restoreToken.rejected. New isRestoringToken:",
+					state.isRestoringToken
+				); // Log new
+				console.log(
+					"authSlice: Rejected auth state:",
+					JSON.stringify(state)
+				);
 			});
 	},
 });
-
-export const logoutUser = createAsyncThunk(
-	"auth/logout",
-	async (_, { dispatch }) => {
-		// No backend call needed for stateless JWT logout usually.
-		// We just clear credentials on the client side.
-		dispatch(clearCredentials());
-		// If you had a backend endpoint to call for logout (e.g., to blacklist a token),
-		// you would do it here with await authService.logoutBackend();
-		return undefined; // Or some other indication of success if needed
-	}
-);
 
 export const { setCredentials, clearCredentials } = authSlice.actions;
 export default authSlice.reducer;
