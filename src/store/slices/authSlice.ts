@@ -7,7 +7,7 @@ const TOKEN_KEY = "user_token"; // Key for storing the token
 const USER_KEY = "user_data"; // Key for storing user data (optional, but can be useful)
 
 // ... (User, LoginCredentials, SignupCredentials, AuthResponse, AuthState, initialState interfaces remain the same) ...
-interface User {
+export interface User {
 	id: string;
 	fullName: string;
 	email: string;

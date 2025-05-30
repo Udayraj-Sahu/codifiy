@@ -3,6 +3,7 @@ import { CompositeNavigationProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import React, { useEffect, useState } from "react";
 import {
+	ActivityIndicator,
 	Alert,
 	FlatList,
 	Image,
@@ -12,22 +13,28 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-// Assuming ProfileStackParamList, UserTabParamList, DocumentStackParamList are correctly defined
-import PrimaryButton from "../../../components/common/PrimaryButton"; // For "Upload/Update Document" & "Logout"
-import { useAuth } from "../../../context/AuthContext"; // To get user data and logout
+import PrimaryButton from "../../../components/common/PrimaryButton";
+// import { useAuth } from "../../../context/AuthContext"; // Using Redux for auth state primarily now
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+
+import { useDispatch, useSelector } from "react-redux"; // <<< ADDED
+import { logoutUser } from "../../../store/slices/authSlice"; // <<< ADDED logoutUser
+import { fetchUserDocumentsThunk } from "../../../store/slices/documentSlice"; // <<< ADDED
+import { AppDispatch, RootState } from "../../../store/store"; // <<< ADDED
+// Placeholder for a new thunk for user bookings
+// import { fetchUserPastBookingsThunk, BookingSummary } from '../../../store/slices/userBookingsSlice';
+
 import {
 	ProfileStackParamList,
 	UserTabParamList,
 } from "../../../navigation/types";
 import { borderRadius, colors, spacing, typography } from "../../../theme";
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Example for icons
 
-// --- Types and Dummy Data ---
+// --- Types ---
 interface UserProfileData {
 	fullName: string;
 	email: string;
 	profileImageUrl?: string;
-	// This would come from a user object, potentially from useAuth()
 }
 
 type DocumentVerificationStatus =
@@ -36,52 +43,19 @@ type DocumentVerificationStatus =
 	| "Rejected"
 	| "Not Uploaded";
 
+// This would come from your new userBookingsSlice or bookingSlice
 interface PastBooking {
-	id: string;
-	bikeName: string;
-	bikeImageUrl: string;
-	rentalDates: string; // e.g., "May 20 - May 22, 2025"
-	status: "Completed"; // All in this list are completed
+	id: string; // booking._id
+	bikeName: string; // bike.model
+	bikeImageUrl: string; // bike.images[0].url
+	rentalDates: string;
+	status: "Completed";
 }
-
-const DUMMY_USER_PROFILE_DATA: UserProfileData = {
-	fullName: "Satoshi Nakamoto",
-	email: "satoshi@nakamoto.com",
-	profileImageUrl: "https://via.placeholder.com/100x100.png?text=SN",
-};
-
-const DUMMY_DOCUMENT_STATUS: DocumentVerificationStatus = "Pending Review";
-
-const DUMMY_PAST_BOOKINGS: PastBooking[] = [
-	{
-		id: "pb1",
-		bikeName: "City Cruiser",
-		bikeImageUrl:
-			"https://via.placeholder.com/150x100.png?text=City+Cruiser",
-		rentalDates: "May 20 - May 21",
-		status: "Completed",
-	},
-	{
-		id: "pb2",
-		bikeName: "Adventure Pro",
-		bikeImageUrl: "https://via.placeholder.com/150x100.png?text=Adv+Pro",
-		rentalDates: "Apr 15 - Apr 16",
-		status: "Completed",
-	},
-	{
-		id: "pb3",
-		bikeName: "Urban Rider",
-		bikeImageUrl:
-			"https://via.placeholder.com/150x100.png?text=Urban+Rider",
-		rentalDates: "Mar 10 - Mar 12",
-		status: "Completed",
-	},
-];
-// --- End Dummy Data ---
-
-// --- Past Booking Card Component (Inline or separate) ---
+const iconColor = "#FFFFFF"; // IMPORTANT: Change this to match your button's text color or design
+const iconSize = 20;
+// --- Past Booking Card Component (Keep as is) ---
 const PastBookingCard: React.FC<{ item: PastBooking; onPress: () => void }> = ({
-	item,
+	/* ... */ item,
 	onPress,
 }) => (
 	<TouchableOpacity
@@ -89,7 +63,11 @@ const PastBookingCard: React.FC<{ item: PastBooking; onPress: () => void }> = ({
 		onPress={onPress}
 		activeOpacity={0.8}>
 		<Image
-			source={{ uri: item.bikeImageUrl }}
+			source={
+				item.bikeImageUrl
+					? { uri: item.bikeImageUrl }
+					: require("../../../../assets/images/icon.png")
+			}
 			style={styles.pastBookingImage}
 		/>
 		<Text style={styles.pastBookingBikeName} numberOfLines={1}>
@@ -103,83 +81,221 @@ const PastBookingCard: React.FC<{ item: PastBooking; onPress: () => void }> = ({
 		</View>
 	</TouchableOpacity>
 );
-// --- End Past Booking Card ---
 
-// --- Setting List Item (Inline or separate) ---
+// --- Setting List Item (Keep as is) ---
 interface SettingListItemProps {
 	label: string;
-	iconPlaceholder?: string;
+	iconName?: string; // Name of the MaterialIcon
+	iconType?: "material" | "emoji"; // Example if you want to support both
+	iconPlaceholder?: string; // For emoji
+	iconColor?: string;
+	iconSize?: number;
 	onPress: () => void;
 }
 const SettingListItem: React.FC<SettingListItemProps> = ({
-	label,
+	/* ... */ label,
+	iconName,
+	iconType = "material",
 	iconPlaceholder,
+	iconColor = "black",
+	iconSize = 20,
 	onPress,
 }) => (
 	<TouchableOpacity
 		style={styles.settingListItem}
 		onPress={onPress}
 		activeOpacity={0.7}>
-		{iconPlaceholder && (
-			<Text style={styles.settingListItemIcon}>{iconPlaceholder}</Text>
-		)}
+		{/* Corrected Icon Logic */}
+		{iconType === "material" && iconName ? (
+			<MaterialIcons
+				name={iconName}
+				size={iconSize}
+				color={iconColor}
+				style={styles.iconStyle}
+			/>
+		) : iconType === "emoji" && iconPlaceholder ? (
+			<Text
+				style={[
+					styles.editIcon,
+					{ fontSize: iconSize, color: iconColor },
+				]}>
+				{iconPlaceholder}
+			</Text>
+		) : null}
+		{/* Fallback: If you want a default icon when none is specified or if only iconName is given without iconType */}
+		{/* {!iconType && iconName && (
+                <MaterialIcons name={iconName} size={iconSize} color={iconColor} style={styles.iconStyle} />
+            )} */}
+
 		<Text style={styles.settingListItemLabel}>{label}</Text>
 		<Text style={styles.settingListItemArrow}>›</Text>
 	</TouchableOpacity>
 );
-// --- End Setting List Item ---
 
-// Navigation Props
 type ProfileScreenNavigationProp = CompositeNavigationProp<
 	StackNavigationProp<ProfileStackParamList, "Profile">,
-	StackNavigationProp<UserTabParamList> // For navigating to other tabs like DocumentsTab
+	StackNavigationProp<UserTabParamList> // For navigating to other tabs
 >;
 
 interface ProfileScreenProps {
 	navigation: ProfileScreenNavigationProp;
 }
 
+// Placeholder for fetching past bookings - implement this in a proper slice
+const fetchUserPastBookingsThunkPlaceholder =
+	() => async (dispatch: AppDispatch) => {
+		console.log("Placeholder: Dispatching fetchUserPastBookingsThunk");
+		dispatch({ type: "userBookings/fetchPast/pending" });
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+		// Simulate some data or an empty array
+		const DUMMY_PAST_BOOKINGS_FETCHED: PastBooking[] = [
+			{
+				id: "pb1",
+				bikeName: "City Cruiser DB",
+				bikeImageUrl:
+					"https://via.placeholder.com/150x100.png?text=City+Cruiser+DB",
+				rentalDates: "May 20 - May 21",
+				status: "Completed",
+			},
+			{
+				id: "pb2",
+				bikeName: "Adventure Pro DB",
+				bikeImageUrl:
+					"https://via.placeholder.com/150x100.png?text=Adv+Pro+DB",
+				rentalDates: "Apr 15 - Apr 16",
+				status: "Completed",
+			},
+		];
+		dispatch({
+			type: "userBookings/fetchPast/fulfilled",
+			payload: DUMMY_PAST_BOOKINGS_FETCHED,
+		});
+	};
+// End Placeholder
+
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-	// In a real app, user data and document status would come from useAuth() or fetched
-	const { user: authUser, signOut } = useAuth(); // Assuming useAuth provides the user object
-	const [userProfile, setUserProfile] = useState<UserProfileData>(
-		authUser || DUMMY_USER_PROFILE_DATA
-	); // Fallback to dummy if authUser is null initially
+	const dispatch = useDispatch<AppDispatch>();
+	const authUser = useSelector((state: RootState) => state.auth.user);
+	const { userDocuments, isLoadingUserDocs, errorUserDocs } = useSelector(
+		(state: RootState) => state.documents
+	);
+
+	// Placeholder state for past bookings (replace with selector from a real slice)
+	const [pastBookings, setPastBookings] = useState<PastBooking[]>([]);
+	const [isLoadingPastBookings, setIsLoadingPastBookings] = useState(true);
+	const [errorPastBookings, setErrorPastBookings] = useState<string | null>(
+		null
+	);
+
+	const [userProfile, setUserProfile] = useState<UserProfileData | null>(
+		null
+	);
 	const [documentStatus, setDocumentStatus] =
-		useState<DocumentVerificationStatus>(DUMMY_DOCUMENT_STATUS);
+		useState<DocumentVerificationStatus>("Not Uploaded");
 
 	useEffect(() => {
 		if (authUser) {
-			// Assuming authUser from useAuth has { fullName, email, profileImageUrl }
 			setUserProfile({
-				fullName: authUser.fullName || "User Name", // Adjust based on your User type from useAuth
+				fullName: authUser.fullName,
 				email: authUser.email,
-				profileImageUrl:
-					(authUser as any).profileImageUrl ||
-					DUMMY_USER_PROFILE_DATA.profileImageUrl, // Cast if profileImageUrl is not on your context's User type
+				profileImageUrl: (authUser as any).profileImageUrl, // Assuming your Redux User type might have this
 			});
-		}
-		// TODO: Fetch actual document status and past bookings
-	}, [authUser]);
+			dispatch(fetchUserDocumentsThunk());
 
-	const handleEditProfile = () => {
-		navigation.navigate("EditProfile");
-	};
+			// Simulate dispatching and handling for past bookings
+			const loadPastBookings = async () => {
+				setIsLoadingPastBookings(true);
+				setErrorPastBookings(null);
+				// This is where you would dispatch your actual thunk
+				// const resultAction = await dispatch(fetchUserPastBookingsThunk());
+				// if (fetchUserPastBookingsThunk.fulfilled.match(resultAction)) {
+				// setPastBookings(resultAction.payload as PastBooking[]); // Adjust payload structure
+				// } else if (fetchUserPastBookingsThunk.rejected.match(resultAction)) {
+				// setErrorPastBookings(resultAction.payload as string);
+				// }
+				// Using placeholder:
+				await dispatch(fetchUserPastBookingsThunkPlaceholder() as any);
+				// Simulate getting data from a hypothetical slice:
+				// For now, directly setting based on placeholder thunk simulation
+				const DUMMY_PAST_BOOKINGS_FETCHED: PastBooking[] = [
+					{
+						id: "pb1",
+						bikeName: "City Cruiser DB",
+						bikeImageUrl:
+							"https://via.placeholder.com/150x100.png?text=City+Cruiser+DB",
+						rentalDates: "May 20 - May 21",
+						status: "Completed",
+					},
+					{
+						id: "pb2",
+						bikeName: "Adventure Pro DB",
+						bikeImageUrl:
+							"https://via.placeholder.com/150x100.png?text=Adv+Pro+DB",
+						rentalDates: "Apr 15 - Apr 16",
+						status: "Completed",
+					},
+				];
+				setPastBookings(DUMMY_PAST_BOOKINGS_FETCHED);
+
+				setIsLoadingPastBookings(false);
+			};
+			loadPastBookings();
+		} else {
+			// Handle user not being authenticated (e.g., redirect or show limited profile)
+			setUserProfile(null);
+			setPastBookings([]);
+		}
+	}, [authUser, dispatch]);
+
+	useEffect(() => {
+		// Derive document status from fetched userDocuments
+		if (userDocuments && userDocuments.length > 0) {
+			const frontLicense = userDocuments.find(
+				(doc) =>
+					doc.documentType === "drivers_license" &&
+					doc.documentSide === "front"
+			);
+			const backLicense = userDocuments.find(
+				(doc) =>
+					doc.documentType === "drivers_license" &&
+					doc.documentSide === "back"
+			);
+
+			if (
+				frontLicense?.status === "approved" &&
+				backLicense?.status === "approved"
+			) {
+				setDocumentStatus("Verified");
+			} else if (
+				frontLicense?.status === "rejected" ||
+				backLicense?.status === "rejected"
+			) {
+				setDocumentStatus("Rejected");
+			} else if (
+				frontLicense?.status === "pending" ||
+				backLicense?.status === "pending"
+			) {
+				setDocumentStatus("Pending Review");
+			} else if (frontLicense || backLicense) {
+				setDocumentStatus("Pending Review"); // If one side is there but not yet reviewed fully
+			} else {
+				setDocumentStatus("Not Uploaded");
+			}
+		} else if (!isLoadingUserDocs && userDocuments.length === 0) {
+			setDocumentStatus("Not Uploaded");
+		}
+	}, [userDocuments, isLoadingUserDocs]);
+
+	const handleEditProfile = () => navigation.navigate("EditProfile");
 
 	const handleUploadDocument = () => {
 		// Navigate to DocumentUploadScreen within the ProfileStack
 		navigation.navigate("DocumentUploadScreen", {
-			// Assuming it's now in ProfileStack
-			isVerificationRequired: true,
+			isVerificationRequired: true, // Example param
 		});
 	};
 
-	const handleViewAllBookings = () => {
-		// Navigate to the MyRentalsScreen (which was previously in RentalsTab)
-		// Assuming MyRentalsScreen is now part of ProfileStack or another accessible stack
-		// For now, let's assume we'll add it to ProfileStackParamList
-		navigation.navigate("MyRentalsScreen");
-	};
+	const handleViewAllBookings = () => navigation.navigate("MyRentalsScreen");
 
 	const handleLogout = () => {
 		Alert.alert("Logout", "Are you sure you want to log out?", [
@@ -187,15 +303,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 			{
 				text: "Logout",
 				style: "destructive",
-				onPress: async () => {
-					await signOut();
-					// AppNavigator will handle redirecting to Auth flow
-				},
+				onPress: () => dispatch(logoutUser()), // Dispatch Redux logout action
 			},
 		]);
 	};
 
 	const getStatusIndicatorColor = () => {
+		// ... (keep as is)
 		switch (documentStatus) {
 			case "Pending Review":
 				return colors.warning || "orange";
@@ -208,11 +322,33 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 		}
 	};
 
+	if (
+		!authUser &&
+		!useSelector((state: RootState) => state.auth.isRestoringToken)
+	) {
+		// This case might be hit if restoreToken finishes and finds no user,
+		// AppNavigator should ideally handle redirect to Auth flow.
+		// For safety, can show a minimal message or redirect.
+		return (
+			<View style={styles.centered}>
+				<Text>Please log in to view your profile.</Text>
+				{/* Optionally a button to navigate to Login */}
+			</View>
+		);
+	}
+	if (!userProfile) {
+		// Still waiting for authUser to populate from Redux
+		return (
+			<View style={styles.centered}>
+				<ActivityIndicator size="large" color={colors.primary} />
+			</View>
+		);
+	}
+
 	return (
 		<ScrollView
 			style={styles.container}
 			contentContainerStyle={styles.contentContainer}>
-			{/* Profile Header */}
 			<View style={styles.profileHeaderSection}>
 				<TouchableOpacity
 					onPress={handleEditProfile}
@@ -222,41 +358,65 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 							userProfile.profileImageUrl
 								? { uri: userProfile.profileImageUrl }
 								: require("../../../../assets/images/icon.png")
-						} // Ensure placeholder exists
+						}
 						style={styles.profileImage}
 					/>
 					<View style={styles.editIconContainer}>
-						<Text style={styles.editIcon}>✏️</Text>
+						<Text style={styles.editIcon}>
+							<MaterialIcons
+								name="edit"
+								size={10}
+								color="black"
+							/>
+						</Text>
 					</View>
 				</TouchableOpacity>
 				<Text style={styles.userName}>{userProfile.fullName}</Text>
 				<Text style={styles.userEmail}>{userProfile.email}</Text>
 			</View>
 
-			{/* ID Document Status Card */}
 			<View style={styles.cardSection}>
 				<Text style={styles.cardTitle}>ID Document Status</Text>
-				<View style={styles.statusRow}>
-					<View
-						style={[
-							styles.statusIndicator,
-							{ backgroundColor: getStatusIndicatorColor() },
-						]}
-					/>
-					<Text style={styles.statusLabel}>{documentStatus}</Text>
-				</View>
-				<PrimaryButton
-					title="Upload / Update Document"
-					onPress={handleUploadDocument}
-					style={styles.documentButton}
-					textStyle={styles.documentButtonText} // For potentially smaller text
-				/>
+				{isLoadingUserDocs ? (
+					<ActivityIndicator color={colors.primary} />
+				) : (
+					<>
+						<View style={styles.statusRow}>
+							<View
+								style={[
+									styles.statusIndicator,
+									{
+										backgroundColor:
+											getStatusIndicatorColor(),
+									},
+								]}
+							/>
+							<Text style={styles.statusLabel}>
+								{documentStatus}
+							</Text>
+						</View>
+						<PrimaryButton
+							title={
+								documentStatus === "Verified"
+									? "View Documents"
+									: "Upload / Update Document"
+							}
+							onPress={handleUploadDocument}
+							style={styles.documentButton}
+							textStyle={styles.documentButtonText}
+						/>
+					</>
+				)}
+				{errorUserDocs && (
+					<Text style={styles.errorText}>
+						Error loading documents: {errorUserDocs}
+					</Text>
+				)}
 				<Text style={styles.cardNote}>
 					Your ID document is required to book bikes.
 				</Text>
 			</View>
 
-			{/* Booking History Section */}
 			<View style={styles.cardSection}>
 				<View style={styles.sectionHeaderRow}>
 					<Text style={styles.cardTitle}>Booking History</Text>
@@ -264,86 +424,99 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 						<Text style={styles.viewAllLink}>View All</Text>
 					</TouchableOpacity>
 				</View>
-				<FlatList
-					horizontal
-					data={DUMMY_PAST_BOOKINGS}
-					renderItem={({ item }) => (
-						<PastBookingCard
-							item={item}
-							onPress={() => {
-								console.log(
-									"View past booking details:",
-									item.id
-								);
-								// navigation.navigate('RideDetailsScreen', { bookingId: item.id }); // If RideDetailsScreen is in ProfileStack
-							}}
-						/>
-					)}
-					keyExtractor={(item) => item.id}
-					showsHorizontalScrollIndicator={false}
-					contentContainerStyle={styles.horizontalListContent}
-				/>
+				{isLoadingPastBookings ? (
+					<ActivityIndicator color={colors.primary} />
+				) : errorPastBookings ? (
+					<Text style={styles.errorText}>
+						Error loading bookings: {errorPastBookings}
+					</Text>
+				) : pastBookings.length === 0 ? (
+					<Text style={styles.noItemsText}>
+						No past bookings found.
+					</Text>
+				) : (
+					<FlatList
+						horizontal
+						data={pastBookings}
+						renderItem={({ item }) => (
+							<PastBookingCard
+								item={item}
+								onPress={() =>
+									navigation.navigate("RideDetailsScreen", {
+										bookingId: item.id,
+									})
+								}
+							/>
+						)}
+						keyExtractor={(item) => item.id}
+						showsHorizontalScrollIndicator={false}
+						contentContainerStyle={styles.horizontalListContent}
+					/>
+				)}
 			</View>
 
-			{/* Settings Menu */}
 			<View style={styles.settingsMenuSection}>
 				<SettingListItem
 					label="Settings"
-					iconPlaceholder="⚙️"
+					iconName="settings"
 					onPress={() => navigation.navigate("Settings")}
 				/>
 				<SettingListItem
 					label="Change Password"
-					iconPlaceholder="🔒"
-					onPress={() =>
-						Alert.alert("Navigate", "To Change Password screen")
-					}
+					iconName="key"
+					onPress={() => navigation.navigate("ChangePasswordScreen")}
 				/>
 				<SettingListItem
 					label="Notification Preferences"
-					iconPlaceholder="🔔"
+					iconName="notifications"
 					onPress={() =>
-						Alert.alert(
-							"Navigate",
-							"To Notification Preferences screen"
-						)
+						navigation.navigate("NotificationPreferencesScreen")
 					}
 				/>
 				<SettingListItem
 					label="Help & Support"
-					iconPlaceholder="❓"
-					onPress={() =>
-						Alert.alert("Navigate", "To Help & Support screen")
-					}
+					iconName="info"
+					onPress={() => navigation.navigate("ContactSupportScreen")}
 				/>
 			</View>
 
-			{/* Logout Button */}
 			<View style={styles.logoutButtonContainer}>
 				<PrimaryButton
 					title="Logout"
 					onPress={handleLogout}
-					// You might want a specific style for logout (e.g., red text or different background)
-					// style={styles.customLogoutButton}
-					// textStyle={styles.customLogoutButtonText}
 					iconLeft={
-						<Text style={{ marginRight: spacing.s, fontSize: 18 }}>
-							🚪
-						</Text>
-					} // Example icon
+						<MaterialIcons
+							name="logout" // Or "exit-to-app"
+							size={iconSize}
+							color={iconColor}
+							style={{ marginRight: spacing.s }} // Keep or adjust marginRight as needed
+						/>
+					}
 				/>
 			</View>
 		</ScrollView>
 	);
 };
 
+// Styles
 const styles = StyleSheet.create({
-	container: {
+	container: { flex: 1, backgroundColor: colors.backgroundMain || "#F7F7F7" },
+	contentContainer: { paddingBottom: spacing.xxl },
+	centered: {
 		flex: 1,
-		backgroundColor: colors.backgroundMain || "#F7F7F7", // Off-white
+		justifyContent: "center",
+		alignItems: "center",
+		padding: spacing.l,
 	},
-	contentContainer: {
-		paddingBottom: spacing.xxl,
+	errorText: {
+		color: colors.error,
+		textAlign: "center",
+		marginTop: spacing.s,
+	},
+	noItemsText: {
+		color: colors.textMedium,
+		textAlign: "center",
+		marginVertical: spacing.m,
 	},
 	profileHeaderSection: {
 		alignItems: "center",
@@ -351,10 +524,7 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.white,
 		marginBottom: spacing.m,
 	},
-	profileImageContainer: {
-		position: "relative", // For edit icon positioning
-		marginBottom: spacing.s,
-	},
+	profileImageContainer: { position: "relative", marginBottom: spacing.s },
 	profileImage: {
 		width: 100,
 		height: 100,
@@ -376,9 +546,7 @@ const styles = StyleSheet.create({
 		shadowRadius: 2,
 		elevation: 2,
 	},
-	editIcon: {
-		fontSize: 16, // Adjust placeholder size
-	},
+	editIcon: { fontSize: 16 },
 	userName: {
 		fontSize: typography.fontSizes.xl,
 		fontWeight: typography.fontWeights.bold,
@@ -425,12 +593,10 @@ const styles = StyleSheet.create({
 		fontWeight: typography.fontWeights.medium,
 	},
 	documentButton: {
-		backgroundColor: colors.primary, // Rounded green button
-		paddingVertical: spacing.s, // Make it a bit smaller than main primary buttons
+		backgroundColor: colors.primary,
+		paddingVertical: spacing.s,
 	},
-	documentButtonText: {
-		fontSize: typography.fontSizes.s,
-	},
+	documentButtonText: { fontSize: typography.fontSizes.s },
 	cardNote: {
 		fontSize: typography.fontSizes.xs,
 		color: colors.textLight,
@@ -441,18 +607,15 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		// marginBottom: spacing.s, // Already handled by cardTitle margin
 	},
 	viewAllLink: {
 		fontSize: typography.fontSizes.s,
 		color: colors.primary,
 		fontWeight: typography.fontWeights.medium,
 	},
-	horizontalListContent: {
-		paddingTop: spacing.xs, // Space after title
-	},
+	horizontalListContent: { paddingTop: spacing.xs },
 	pastBookingCard: {
-		width: 180, // Adjust for desired size
+		width: 180,
 		marginRight: spacing.m,
 		backgroundColor: colors.backgroundLight || "#F5F5F5",
 		borderRadius: borderRadius.m,
@@ -488,17 +651,11 @@ const styles = StyleSheet.create({
 		fontSize: typography.fontSizes.xs - 1,
 		fontWeight: typography.fontWeights.bold,
 	},
-	settingsMenuSection: {
-		marginTop: spacing.xs, // Just a bit of space if sections are not carded
-		// backgroundColor: colors.white, // if settings items should have white background overall
-		// marginHorizontal: spacing.m, // if carded
-		// borderRadius: borderRadius.m, // if carded
-		// elevation: 1, // if carded
-	},
+	settingsMenuSection: { marginTop: spacing.xs },
 	settingListItem: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingVertical: spacing.l - 2, // Slightly less padding for settings
+		paddingVertical: spacing.l - 2,
 		paddingHorizontal: spacing.m,
 		backgroundColor: colors.white,
 		borderBottomWidth: StyleSheet.hairlineWidth,
@@ -518,7 +675,7 @@ const styles = StyleSheet.create({
 	},
 	settingListItemArrow: {
 		fontSize: typography.fontSizes.l,
-		color: "#F0F0F0",
+		color: colors.borderDefault,
 	},
 	logoutButtonContainer: {
 		paddingHorizontal: spacing.m,

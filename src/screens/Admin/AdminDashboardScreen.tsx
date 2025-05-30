@@ -1,92 +1,51 @@
 // src/screens/Admin/AdminDashboardScreen.tsx
 import { StackNavigationProp } from "@react-navigation/stack";
-import React, { useLayoutEffect, useState } from "react";
+import React, {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useState,
+} from "react"; // Added useEffect, useCallback
 import {
+	ActivityIndicator,
+	Alert,
+	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	Text,
-	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { AdminStackParamList } from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // For actual icons
-import { useDispatch } from "react-redux"; // <<< 1. IMPORT useDispatch
+import { useDispatch, useSelector } from "react-redux";
+import { AdminStackParamList } from "../../navigation/types";
+import {
+	ActivityItemData,
+	fetchAdminKpiStatsThunk,
+	fetchAdminRecentActivityThunk,
+} from "../../store/slices/adminDashboardSlice"; // Corrected import
 import { logoutUser } from "../../store/slices/authSlice";
-import { AppDispatch } from "../../store/store"; // <<< 2. IMPORT AppDispatch (adjust path as needed)
-// --- Types and Dummy Data ---
-interface StatisticItem {
+import { AppDispatch, RootState } from "../../store/store";
+import { borderRadius, colors, spacing, typography } from "../../theme";
+
+// --- Types (StatisticItem is now for display, mapped from KpiStatsData) ---
+interface StatisticItemDisplay {
 	id: string;
 	label: string;
 	value: string | number;
-	iconPlaceholder: string; // Emoji or icon name
-	color?: string; // Optional specific color for this stat card text/icon
+	iconPlaceholder: string;
+	color?: string;
 }
-
+// PrimaryActionItem can remain as is, as it's for navigation
 interface PrimaryActionItem {
 	id: string;
 	label: string;
 	iconPlaceholder: string;
 	onPress: () => void;
 }
+// ActivityItemData is imported from slice
 
-interface ActivityItem {
-	id: string;
-	iconPlaceholder: string;
-	description: string;
-	timestamp: string;
-}
-
-const DUMMY_STATS: StatisticItem[] = [
-	{ id: "s1", label: "Total Bikes", value: 120, iconPlaceholder: "🚲" }, // Using infoDark for blueish
-	{ id: "s2", label: "Active Bookings", value: 15, iconPlaceholder: "🗓️" },
-	{ id: "s3", label: "Pending Bookings", value: 4, iconPlaceholder: "⏳" },
-	{ id: "s4", label: "Registered Users", value: 350, iconPlaceholder: "👥" },
-];
-
-const DUMMY_RECENT_ACTIVITY: ActivityItem[] = [
-	{
-		id: "a1",
-		iconPlaceholder: "➕",
-		description: "Mountain X bike added",
-		timestamp: "2 minutes ago",
-	},
-	{
-		id: "a2",
-		iconPlaceholder: "✔️",
-		description: "Booking #12345 confirmed",
-		timestamp: "15 minutes ago",
-	},
-	{
-		id: "a3",
-		iconPlaceholder: "👤",
-		description: "John Doe registered",
-		timestamp: "1 hour ago",
-	},
-	{
-		id: "a4",
-		iconPlaceholder: "❌",
-		description: "Booking #12344 cancelled",
-		timestamp: "2 hours ago",
-	},
-	{
-		id: "a5",
-		iconPlaceholder: "🛠️",
-		description: "Road Bike maintenance completed",
-		timestamp: "3 hours ago",
-	},
-	{
-		id: "a6",
-		iconPlaceholder: "📊",
-		description: "New report generated",
-		timestamp: "4 hours ago",
-	},
-];
-// --- End Dummy Data ---
-
-// --- Reusable Components (Inline for this screen, can be extracted) ---
-const StatisticCard: React.FC<{ item: StatisticItem }> = ({ item }) => (
+// --- Reusable Components (Keep as is, ensure props match new types) ---
+const StatisticCard: React.FC<{ item: StatisticItemDisplay }> = ({ item }) => (
 	<View style={styles.statCard}>
 		<Text
 			style={[styles.statIcon, { color: item.color || colors.primary }]}>
@@ -96,9 +55,8 @@ const StatisticCard: React.FC<{ item: StatisticItem }> = ({ item }) => (
 		<Text style={styles.statLabel}>{item.label}</Text>
 	</View>
 );
-
 const PrimaryAction: React.FC<{ item: PrimaryActionItem }> = ({ item }) => (
-	<TouchableOpacity
+	/* ... as before ... */ <TouchableOpacity
 		style={styles.primaryActionCard}
 		onPress={item.onPress}
 		activeOpacity={0.7}>
@@ -106,8 +64,7 @@ const PrimaryAction: React.FC<{ item: PrimaryActionItem }> = ({ item }) => (
 		<Text style={styles.primaryActionLabel}>{item.label}</Text>
 	</TouchableOpacity>
 );
-
-const ActivityFeedItem: React.FC<{ item: ActivityItem }> = ({ item }) => (
+const ActivityFeedItem: React.FC<{ item: ActivityItemData }> = ({ item }) => (
 	<View style={styles.activityItem}>
 		<Text style={styles.activityIcon}>{item.iconPlaceholder}</Text>
 		<View style={styles.activityTextContainer}>
@@ -118,13 +75,11 @@ const ActivityFeedItem: React.FC<{ item: ActivityItem }> = ({ item }) => (
 		</View>
 	</View>
 );
-// --- End Reusable ---
 
 type AdminDashboardScreenNavigationProp = StackNavigationProp<
 	AdminStackParamList,
 	"AdminDashboard"
 >;
-
 interface AdminDashboardScreenProps {
 	navigation: AdminDashboardScreenNavigationProp;
 }
@@ -133,16 +88,48 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 	navigation,
 }) => {
 	const dispatch = useDispatch<AppDispatch>();
-	const [searchQuery, setSearchQuery] = useState("");
-	const [stats, setStats] = useState<StatisticItem[]>(DUMMY_STATS);
-	const [recentActivity, setRecentActivity] = useState<ActivityItem[]>(
-		DUMMY_RECENT_ACTIVITY
+	const {
+		kpiStats: rawKpiStats, // This will be an object like { totalBikes: 10, ... }
+		recentActivity,
+		isLoadingKpis,
+		isLoadingActivity,
+		errorKpis,
+		errorActivity,
+	} = useSelector((state: RootState) => state.adminDashboard);
+	const authUser = useSelector((state: RootState) => state.auth.user);
+
+	const [searchQuery, setSearchQuery] = useState(""); // Local state for search input
+
+	const loadDashboardData = useCallback(
+		(isRefreshing = false) => {
+			if (!isRefreshing && (isLoadingKpis || isLoadingActivity)) return; // Prevent multiple simultaneous fetches
+			dispatch(fetchAdminKpiStatsThunk());
+			dispatch(fetchAdminRecentActivityThunk({ limit: 6 })); // Fetch 6 recent activities
+		},
+		[dispatch, isLoadingKpis, isLoadingActivity]
 	);
 
-	// Configure header icons
+	useEffect(() => {
+		loadDashboardData();
+		const unsubscribe = navigation.addListener("focus", () => {
+			loadDashboardData(true); // Refresh data on focus
+		});
+		return unsubscribe;
+	}, [navigation, loadDashboardData]);
+
+	const handleLogout = () => {
+		Alert.alert("Logout", "Are you sure you want to log out?", [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Logout",
+				style: "destructive",
+				onPress: () => dispatch(logoutUser()),
+			},
+		]);
+	};
+
 	useLayoutEffect(() => {
 		navigation.setOptions({
-			// Title "Dashboard" is set in AdminAppNavigator's screen options
 			headerLeft: () => (
 				<TouchableOpacity
 					onPress={() => navigation.navigate("AdminProfile")}
@@ -164,6 +151,40 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 		});
 	}, [navigation]);
 
+	// Transform rawKpiStats from Redux store into the array format needed by StatisticCard
+	const displayStats: StatisticItemDisplay[] = React.useMemo(() => {
+		return [
+			{
+				id: "s1",
+				label: "Total Bikes",
+				value: rawKpiStats.totalBikes ?? "N/A",
+				iconPlaceholder: "🚲",
+				color: colors.info,
+			},
+			{
+				id: "s2",
+				label: "Active Bookings",
+				value: rawKpiStats.activeBookings ?? "N/A",
+				iconPlaceholder: "🗓️",
+				color: colors.success,
+			},
+			{
+				id: "s3",
+				label: "Pending Docs",
+				value: rawKpiStats.pendingDocuments ?? "N/A",
+				iconPlaceholder: "📄",
+				color: colors.warning,
+			},
+			{
+				id: "s4",
+				label: "Registered Users",
+				value: rawKpiStats.registeredUsers ?? "N/A",
+				iconPlaceholder: "👥",
+				color: (colors as any).purple || colors.primaryDark,
+			},
+		];
+	}, [rawKpiStats]);
+
 	const primaryActions: PrimaryActionItem[] = [
 		{
 			id: "pa1",
@@ -182,74 +203,100 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 			label: "View Documents",
 			iconPlaceholder: "📄",
 			onPress: () =>
-				navigation.navigate("AdminDocumentList", { status: "pending" }),
-		}, // Example param
+				navigation.navigate("AdminDocumentList", {
+					initialStatus: "approved",
+				}),
+		}, // Admin sees approved by default
 	];
 
 	const handleSearch = (query: string) => {
-		setSearchQuery(query);
-		// TODO: Implement actual search logic or navigate to a search results screen
-		if (query.length > 2) {
-			console.log("Searching for:", query);
-			// navigation.navigate('AdminSearchResults', { query });
-		}
+		/* TODO: Implement if dashboard search is needed */
 	};
-	const handleLogout = () => {
-		console.log("Attempting to dispatch logoutUser..."); // <<< ADD LOG
-		dispatch(logoutUser());
-	};
+
+	if (
+		(isLoadingKpis && displayStats.every((s) => s.value === "N/A")) ||
+		(isLoadingActivity && recentActivity.length === 0 && !authUser)
+	) {
+		return (
+			<View style={styles.centeredLoader}>
+				<ActivityIndicator size="large" color={colors.primary} />
+				<Text style={{ marginTop: spacing.s }}>
+					Loading Dashboard...
+				</Text>
+			</View>
+		);
+	}
 
 	return (
 		<ScrollView
 			style={styles.screenContainer}
-			contentContainerStyle={styles.scrollContentContainer}>
-			{/* Statistics Section */}
-			<View style={styles.statsGrid}>
-				{stats.map((stat) => (
-					<StatisticCard key={stat.id} item={stat} />
-				))}
-			</View>
+			contentContainerStyle={styles.scrollContentContainer}
+			refreshControl={
+				<RefreshControl
+					refreshing={isLoadingKpis || isLoadingActivity}
+					onRefresh={() => loadDashboardData(true)}
+					colors={[colors.primary]}
+					tintColor={colors.primary}
+				/>
+			}>
+			<Text style={styles.welcomeTitle}>
+				Welcome back, {authUser?.fullName || "Admin"}!
+			</Text>
+			<Text style={styles.welcomeSubtitle}>
+				Here's what's happening with Bikya today.
+			</Text>
 
-			{/* Primary Actions Section */}
+			{isLoadingKpis && displayStats.every((s) => s.value === "N/A") ? (
+				<ActivityIndicator color={colors.primary} />
+			) : errorKpis ? (
+				<Text style={styles.errorText}>
+					Failed to load stats: {errorKpis}
+				</Text>
+			) : (
+				<View style={styles.statsGrid}>
+					{displayStats.map((stat) => (
+						<StatisticCard key={stat.id} item={stat} />
+					))}
+				</View>
+			)}
+
 			<View style={styles.primaryActionsContainer}>
 				{primaryActions.map((action) => (
 					<PrimaryAction key={action.id} item={action} />
 				))}
 			</View>
 
-			{/* Search Bar */}
-			<View style={styles.searchBarContainer}>
-				{/* <Icon name="magnify" size={20} color={colors.textMedium} style={styles.searchIcon} /> */}
-				<Text style={styles.searchIcon}>🔍</Text>
-				<TextInput
-					placeholder="Search bikes, users or bookings"
-					placeholderTextColor={colors.textPlaceholder}
-					style={styles.searchInput}
-					value={searchQuery}
-					onChangeText={setSearchQuery}
-					onSubmitEditing={() => handleSearch(searchQuery)} // Or trigger search on text change
-					returnKeyType="search"
-				/>
-			</View>
+			{/* Search Bar - Optional */}
+			{/* <View style={styles.searchBarContainer}> ... </View> */}
 
-			{/* Recent Activity Section */}
 			<Text style={styles.sectionTitle}>Recent Activity</Text>
-			<View style={styles.activityListContainer}>
-				{recentActivity.length > 0 ? (
-					recentActivity.map((activity) => (
-						<ActivityFeedItem key={activity.id} item={activity} />
-					))
-				) : (
-					<Text style={styles.noActivityText}>
-						No recent activity.
-					</Text>
-				)}
-			</View>
+			{isLoadingActivity && recentActivity.length === 0 ? (
+				<ActivityIndicator color={colors.primary} />
+			) : errorActivity ? (
+				<Text style={styles.errorText}>
+					Failed to load activity: {errorActivity}
+				</Text>
+			) : (
+				<View style={styles.activityListContainer}>
+					{recentActivity.length > 0 ? (
+						recentActivity.map((activity) => (
+							<ActivityFeedItem
+								key={activity.id}
+								item={activity}
+							/>
+						))
+					) : (
+						<Text style={styles.noActivityText}>
+							No recent activity.
+						</Text>
+					)}
+				</View>
+			)}
+
 			<View style={styles.logoutContainer}>
 				<TouchableOpacity
 					style={styles.logoutButton}
 					onPress={handleLogout}>
-					{/* <Icon name="logout" size={18} color={colors.error} style={{marginRight: spacing.s}} /> */}
 					<Text style={styles.logoutButtonIcon}>🚪</Text>
 					<Text style={styles.logoutButtonText}>Logout</Text>
 				</TouchableOpacity>
@@ -258,14 +305,36 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 	);
 };
 
-// Using soft blue highlights as per prompt - let's assume colors.adminAccent is a soft blue
-// If not, we can use colors.info or colors.primaryLight and adjust.
-const adminAccentColor = colors.info || "#A0D2DB"; // Soft blue
-const adminAccentLightColor = "#E0F3FF";
+// Styles (Ensure they are complete and correct, added centeredLoader, errorText, noDataText)
+const adminAccentColor = colors.info || "#A0D2DB";
+const adminAccentLightColor = colors.infoLight || "#E0F3FF";
 
 const styles = StyleSheet.create({
 	screenContainer: { flex: 1, backgroundColor: colors.white },
 	scrollContentContainer: { padding: spacing.m, paddingBottom: spacing.xl },
+	centeredLoader: { flex: 1, justifyContent: "center", alignItems: "center" },
+	errorText: {
+		color: colors.error,
+		textAlign: "center",
+		marginVertical: spacing.m,
+	},
+	noDataText: {
+		color: colors.textMedium,
+		textAlign: "center",
+		marginVertical: spacing.m,
+		fontStyle: "italic",
+	},
+	welcomeTitle: {
+		fontSize: typography.fontSizes.xxxl,
+		fontWeight: typography.fontWeights.bold,
+		color: colors.textPrimary,
+		marginBottom: spacing.xs,
+	},
+	welcomeSubtitle: {
+		fontSize: typography.fontSizes.l,
+		color: colors.textSecondary,
+		marginBottom: spacing.xl,
+	},
 	statsGrid: {
 		flexDirection: "row",
 		flexWrap: "wrap",
@@ -273,17 +342,19 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.l,
 	},
 	statCard: {
-		backgroundColor: colors.backgroundLight || "#F5F9FC", // Off-white or very light blue
-		width: "48%", // For 2x2 grid
+		backgroundColor: colors.backgroundLight || "#F5F9FC",
+		width: "48%",
 		padding: spacing.m,
 		borderRadius: borderRadius.l,
 		alignItems: "center",
+		justifyContent: "center",
 		marginBottom: spacing.m,
 		shadowColor: colors.black,
 		shadowOffset: { width: 0, height: 1 },
 		shadowOpacity: 0.05,
 		shadowRadius: 2,
 		elevation: 2,
+		aspectRatio: 1.1,
 	},
 	statIcon: { fontSize: 28, marginBottom: spacing.s },
 	statValue: {
@@ -297,24 +368,27 @@ const styles = StyleSheet.create({
 		color: colors.textSecondary,
 		textAlign: "center",
 	},
-
 	primaryActionsContainer: {
 		flexDirection: "row",
 		justifyContent: "space-around",
+		alignItems: "stretch",
 		marginBottom: spacing.l,
+		backgroundColor: adminAccentLightColor,
+		paddingVertical: spacing.m,
+		borderRadius: borderRadius.l,
 	},
 	primaryActionCard: {
 		alignItems: "center",
-		paddingVertical: spacing.m,
-		paddingHorizontal: spacing.s,
-		// backgroundColor: adminAccentLightColor,
+		paddingVertical: spacing.s,
+		paddingHorizontal: spacing.xs,
 		borderRadius: borderRadius.m,
-		minWidth: 100, // Ensure touchable area
+		flex: 1,
+		marginHorizontal: spacing.xs,
 	},
 	primaryActionIcon: {
 		fontSize: 30,
 		color: adminAccentColor,
-		marginBottom: spacing.xs,
+		marginBottom: spacing.s,
 	},
 	primaryActionLabel: {
 		fontSize: typography.fontSizes.s,
@@ -322,7 +396,6 @@ const styles = StyleSheet.create({
 		fontWeight: typography.fontWeights.medium,
 		textAlign: "center",
 	},
-
 	searchBarContainer: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -343,41 +416,72 @@ const styles = StyleSheet.create({
 		color: colors.textPrimary,
 		height: "100%",
 	},
-
 	sectionTitle: {
 		fontSize: typography.fontSizes.l,
 		fontWeight: typography.fontWeights.bold,
 		color: colors.textPrimary,
 		marginBottom: spacing.m,
+		marginTop: spacing.s,
 	},
 	activityListContainer: {
-		// Could be a FlatList if items are many
+		backgroundColor: colors.white,
+		borderRadius: borderRadius.l,
+		paddingHorizontal: spacing.s,
+		shadowColor: colors.black,
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.05,
+		shadowRadius: 2,
+		elevation: 2,
 	},
 	activityItem: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingVertical: spacing.s,
+		paddingVertical: spacing.m,
 		borderBottomWidth: StyleSheet.hairlineWidth,
 		borderBottomColor: colors.borderDefault || "#EEE",
 	},
-	activityIcon: {
+	activityItemIcon: {
 		fontSize: 18,
 		color: colors.textMedium,
 		marginRight: spacing.m,
 		width: 24,
 		textAlign: "center",
 	},
-	activityTextContainer: { flex: 1 },
-	activityDescription: {
-		fontSize: typography.fontSizes.m,
+	activityItemTextContainer: { flex: 1 },
+	activityItemMessage: {
+		fontSize: typography.fontSizes.s,
 		color: colors.textPrimary,
-		marginBottom: spacing.xxs,
 	},
-	activityTimestamp: { fontSize: typography.fontSizes.xs },
+	activityItemTimestamp: {
+		fontSize: typography.fontSizes.xs,
+		color: colors.textLight,
+		marginTop: spacing.xxs,
+	},
 	noActivityText: {
 		color: colors.textMedium,
 		textAlign: "center",
 		paddingVertical: spacing.l,
+		fontStyle: "italic",
+	},
+	logoutContainer: { marginTop: spacing.xl, alignItems: "center" },
+	logoutButton: {
+		flexDirection: "row",
+		backgroundColor: colors.errorLight,
+		paddingVertical: spacing.m,
+		paddingHorizontal: spacing.xl,
+		borderRadius: borderRadius.m,
+		borderWidth: 1,
+		borderColor: colors.error,
+	},
+	logoutButtonIcon: {
+		marginRight: spacing.s,
+		fontSize: 18,
+		color: colors.error,
+	},
+	logoutButtonText: {
+		color: colors.error,
+		fontSize: typography.fontSizes.m,
+		fontWeight: typography.fontWeights.bold,
 	},
 });
 

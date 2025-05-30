@@ -2,12 +2,16 @@
 const Document = require("../models/Document");
 const User = require("../models/User");
 const { validationResult } = require("express-validator");
+const asyncHandler = require("express-async-handler");
 const {
 	uploadToCloudinary,
 	deleteFromCloudinary,
 } = require("../utils/fileUploadUtils"); // Will be needed
 const { notifyUser } = require("../utils/pushNotificationManager");
 exports.uploadUserDocument = async (req, res) => {
+	console.log("--- ENTERED documentController.uploadUserDocument ---"); // First log
+	console.log("Request body:", req.body);
+	console.log("Request file (from multer):", req.file);
 	const errors = validationResult(req);
 	if (!errors.isEmpty()) {
 		return res.status(400).json({ errors: errors.array() });
@@ -51,11 +55,9 @@ exports.uploadUserDocument = async (req, res) => {
 		const user = await User.findById(userId);
 		if (!user) {
 			// This should not happen if 'protect' middleware works, but good check
-			return res
-				.status(404)
-				.json({
-					message: "User not found while trying to link document.",
-				});
+			return res.status(404).json({
+				message: "User not found while trying to link document.",
+			});
 		}
 		user.documents.push(newDocument._id);
 		await user.save();
@@ -81,6 +83,24 @@ exports.uploadUserDocument = async (req, res) => {
 			return res.status(400).json({ errors: [{ msg: err.message }] });
 		}
 		res.status(500).send("Server error");
+		if (
+			err.message &&
+			(err.message.includes("Cloudinary") ||
+				(err.name === "Error" &&
+					err.message.startsWith(
+						"Missing required parameter - file"
+					)))
+		) {
+			// Cloudinary can also throw this if buffer is empty
+			console.error("Cloudinary specific error:", err);
+			return res.status(500).json({
+				errors: [
+					{
+						msg: "Error uploading document to cloud storage. Please try again later.",
+					},
+				],
+			});
+		}
 	}
 };
 
@@ -111,15 +131,106 @@ exports.getUserDocuments = async (req, res) => {
 	}
 };
 
-exports.getAllDocumentsForReview = async (req, res) => {
-	res.status(501).json({
-		message: "Get all documents for review not implemented yet",
+exports.getAllDocumentsForReview = asyncHandler(async (req, res) => {
+	console.log("--- documentController: getAllDocumentsForReview ---");
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		return res.status(400).json({ errors: errors.array() });
+	}
+
+	const page = parseInt(req.query.page, 10) || 1;
+	const limit = parseInt(req.query.limit, 10) || 10; // Default limit to 10
+	const skip = (page - 1) * limit;
+
+	const {
+		status: statusFilter,
+		userId: userIdFilter,
+		search: searchQuery,
+		sortBy,
+	} = req.query;
+	const { role, id: requestingUserId } = req.user;
+
+	let query = {};
+
+	// Role-based filtering
+	if (role === "Admin") {
+		query.status = "approved"; // Admins can only see approved documents
+	} else if (role === "Owner") {
+		if (
+			statusFilter &&
+			statusFilter !== "all" &&
+			["pending", "approved", "rejected"].includes(statusFilter)
+		) {
+			query.status = statusFilter;
+		}
+		// Owners see all documents by default if no status filter, or based on filter.
+	} else {
+		// Should not happen if isAdminOrOwner middleware is effective
+		return res
+			.status(403)
+			.json({ message: "Not authorized to view these documents." });
+	}
+
+	// Filter by specific user ID if provided (e.g., Admin looking up a specific user's approved docs)
+	if (userIdFilter && mongoose.Types.ObjectId.isValid(userIdFilter)) {
+		query.user = userIdFilter;
+	}
+
+	// Search functionality (by user's full name or email)
+	if (searchQuery) {
+		const searchRegex = new RegExp(searchQuery, "i");
+		// Find users matching the search query
+		const matchingUsers = await User.find({
+			$or: [{ fullName: searchRegex }, { email: searchRegex }],
+		}).select("_id"); // Select only their IDs
+
+		if (matchingUsers.length > 0) {
+			// If users are found, filter documents by these user IDs
+			query.user = { $in: matchingUsers.map((user) => user._id) };
+		} else {
+			// No users match the search, so no documents will be found
+			return res.status(200).json({
+				success: true,
+				count: 0,
+				total: 0,
+				pagination: { currentPage: page, totalPages: 0, limit },
+				data: [],
+			});
+		}
+	}
+
+	// Sorting
+	let sortOptions = { createdAt: -1 }; // Default sort: newest first
+	if (sortBy) {
+		const parts = sortBy.split(":"); // e.g., 'createdAt:desc' or 'uploadedAt:asc'
+		if (parts.length === 2 && (parts[1] === "asc" || parts[1] === "desc")) {
+			sortOptions = { [parts[0]]: parts[1] === "desc" ? -1 : 1 };
+		}
+	}
+
+	const documents = await Document.find(query)
+		.populate("user", "fullName email") // Populate user details
+		.populate("reviewedBy", "fullName email") // Populate reviewer details
+		.sort(sortOptions)
+		.skip(skip)
+		.limit(limit)
+		.lean();
+
+	const totalDocuments = await Document.countDocuments(query);
+	const totalPages = Math.ceil(totalDocuments / limit);
+
+	res.status(200).json({
+		success: true,
+		count: documents.length,
+		total: totalDocuments,
+		pagination: {
+			currentPage: page,
+			totalPages,
+			limit,
+		},
+		data: documents,
 	});
-	// Logic:
-	// 1. Check req.user.role
-	// 2. If Owner, find all/pending documents (with pagination/filters)
-	// 3. If Admin, find only 'approved' documents (with pagination/filters)
-};
+});
 
 exports.getDocumentByIdForReview = async (req, res) => {
 	const errors = validationResult(req); // Handles param('docId').isMongoId() from route
@@ -311,11 +422,9 @@ exports.updateDocumentStatusByOwner = async (req, res) => {
 			return res.status(404).json({ message: "Document not found" });
 		}
 		if (document.status !== "pending") {
-			return res
-				.status(400)
-				.json({
-					message: `Document is already '${document.status}' and cannot be updated. Only pending documents can be reviewed.`,
-				});
+			return res.status(400).json({
+				message: `Document is already '${document.status}' and cannot be updated. Only pending documents can be reviewed.`,
+			});
 		}
 		document.status = status;
 		document.reviewedBy = req.user._id;

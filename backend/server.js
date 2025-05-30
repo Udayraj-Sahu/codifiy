@@ -15,13 +15,15 @@ const reviewRoutes = require("./routes/reviewRoutes");
 const promoCodeRoutes = require("./routes/promoCodeRoutes");
 const bikeRoutes = require("./routes/bikeRoutes"); // This handles both user & admin bike ops if consolidated
 const adminBookingRoutes = require("./routes/adminBookingRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 // const adminBikeRoutes = require('./routes/adminBikeRoutes'); // Only if you have a separate file AND mount path for this
-
+const adminDashboardRoutes = require("./routes/adminDashboard");
+const ownerDashboardRoutes = require('./routes/ownerDashboardRoutes');
+const walletRoutes = require('./routes/walletRoutes'); 
 connectDB();
 const app = express();
 
-require("./models/booking"); // Adjust path if needed - THIS IS THE NEW LINE
-console.log("Attempted to explicitly load Booking model (booking.js) in server.js");
+ // Adjust path if needed - THIS IS THE NEW LINE
 
 // Core Middleware
 app.use(cors()); // Enable CORS for all routes
@@ -43,7 +45,10 @@ app.use("/api/documents", documentRoutes); // Assuming you have document routes
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/promocodes", promoCodeRoutes);
-
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use('/api/owner/dashboard', ownerDashboardRoutes); 
+app.use('/api/wallet', walletRoutes);
 // Admin specific routes (if you prefer a distinct prefix)
 // If adminBikeRoutes is a separate file for routes like POST /api/admin/bikes/
 // app.use('/api/admin/bikes', adminBikeRoutes); // Then uncomment and ensure it's defined

@@ -15,10 +15,10 @@ import { useDispatch, useSelector } from "react-redux"; // Ensure useSelector is
 import PrimaryButton from "../../../components/common/PrimaryButton";
 import { DocumentUploadScreenProps } from "../../../navigation/types";
 import {
+	clearUploadError,
 	fetchUserDocumentsThunk,
 	Document as StoreDocument,
 	uploadUserDocumentThunk,
-	clearUploadError
 } from "../../../store/slices/documentSlice";
 import { AppDispatch, RootState } from "../../../store/store"; // Ensure RootState is imported
 
@@ -286,6 +286,7 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 		) {
 			const asset = pickerResult.assets[0];
 			setFile({
+				// setDocFrontFile or setDocBackFile
 				uri: asset.uri,
 				fileName:
 					asset.fileName ||
@@ -293,7 +294,9 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 						.split(".")
 						.pop()}`,
 				fileSize: asset.fileSize,
-				type: asset.type || "image/jpeg",
+				type:
+					asset.mimeType ||
+					(asset.uri.endsWith(".png") ? "image/png" : "image/jpeg"), // Use mimeType, fallback to inferring
 			});
 			if (docSide === "front") setFrontUploadError(null);
 			else setBackUploadError(null);
@@ -310,6 +313,10 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 			Alert.alert("No Document", `Please select the ${docSide} side.`);
 			return;
 		}
+		console.log(
+			"DocumentUploadScreen: Uploading this file object:",
+			JSON.stringify(docFile, null, 2)
+		); // <<< ADD THIS LOG
 		if (!user) {
 			Alert.alert("Error", "User not authenticated.");
 			return;
@@ -469,7 +476,7 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 			<TouchableOpacity
 				style={styles.helpLinkContainer}
 				onPress={() =>
-					navigation.navigate("ProfileTab" as any ,  {
+					navigation.navigate("ProfileTab" as any, {
 						screen: "ContactSupportScreen",
 					})
 				}>

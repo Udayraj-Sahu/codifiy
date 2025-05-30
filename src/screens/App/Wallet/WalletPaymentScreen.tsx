@@ -1,355 +1,321 @@
-// src/screens/App/Wallet/WalletPaymentsScreen.tsx
+// src/screens/App/Wallet/WalletPaymentScreen.tsx
 import { StackNavigationProp } from "@react-navigation/stack";
-import React, { useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
+	ActivityIndicator,
 	Alert,
-	ScrollView,
+	FlatList,
+	RefreshControl,
 	StyleSheet,
 	Text,
 	TouchableOpacity,
 	View,
 } from "react-native";
-import PrimaryButton from "../../../components/common/PrimaryButton"; // Adjust path
-import { WalletStackParamList } from "../../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../../theme"; // Adjust path
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Example for icons
+import { useDispatch, useSelector } from "react-redux";
+import PrimaryButton from "../../../components/common/PrimaryButton";
+import { WalletStackParamList } from "../../../navigation/types";
+import {
+	fetchUserWalletThunk,
+	fetchWalletTransactionsThunk,
+	TransactionData,
+} from "../../../store/slices/walletSlice";
+import { AppDispatch, RootState } from "../../../store/store";
+import { borderRadius, colors, spacing, typography } from "../../../theme";
 
-// --- Types and Dummy Data ---
-interface Transaction {
-	id: string;
-	type: string; // e.g., "Wallet Top-up", "Payment for Booking #1234"
-	dateTime: string; // e.g., "Today, 2:30 PM" or "May 25, 2025"
-	amount: string; // e.g., "+₹500", "-₹250"
-	amountColor: string; // 'green' for credit, 'red' for debit
-	statusIconPlaceholder: string; // '✓', '✕', '⏳'
-}
-
-interface PaymentMethod {
-	id: string;
-	type: "Visa" | "Mastercard" | "UPI" | "Other"; // Example types
-	iconPlaceholder?: string; // For card logos
-	last4: string;
-	expiry?: string; // e.g., "08/28"
-	name?: string; // e.g., 'My Bank UPI'
-}
-
-const DUMMY_BALANCE = "₹1,250.00";
-const DUMMY_TRANSACTIONS: Transaction[] = [
-	{
-		id: "t1",
-		type: "Wallet Top-up",
-		dateTime: "Today, 2:30 PM",
-		amount: "+₹500",
-		amountColor: colors.success || "green",
-		statusIconPlaceholder: "✓",
-	},
-	{
-		id: "t2",
-		type: "Payment for Booking #BKY123",
-		dateTime: "Yesterday, 10:15 AM",
-		amount: "-₹250",
-		amountColor: colors.error || "red",
-		statusIconPlaceholder: "✓",
-	},
-	{
-		id: "t3",
-		type: "Refund for Booking #BKY098",
-		dateTime: "May 23, 2025",
-		amount: "+₹180",
-		amountColor: colors.success || "green",
-		statusIconPlaceholder: "✓",
-	},
-	{
-		id: "t4",
-		type: "Pending Ride Authorization",
-		dateTime: "Just Now",
-		amount: "-₹180",
-		amountColor: colors.warning || "orange",
-		statusIconPlaceholder: "⏳",
-	},
-];
-const DUMMY_PAYMENT_METHODS: PaymentMethod[] = [
-	{
-		id: "pm1",
-		type: "Visa",
-		last4: "1234",
-		expiry: "08/28",
-		iconPlaceholder: "💳",
-	},
-	{
-		id: "pm2",
-		type: "Mastercard",
-		last4: "5678",
-		expiry: "11/26",
-		iconPlaceholder: "💳",
-	},
-];
-// --- End Dummy Data ---
-
-// --- Reusable Components (Inline for brevity) ---
-interface QuickActionProps {
-	label: string;
-	iconPlaceholder: string;
-	onPress: () => void;
-}
-const QuickActionButton: React.FC<QuickActionProps> = ({
-	label,
-	iconPlaceholder,
-	onPress,
-}) => (
-	<TouchableOpacity style={styles.quickActionButton} onPress={onPress}>
-		<View style={styles.quickActionIconContainer}>
-			<Text style={styles.quickActionIcon}>{iconPlaceholder}</Text>
-		</View>
-		<Text style={styles.quickActionLabel}>{label}</Text>
-	</TouchableOpacity>
-);
-
+// --- Transaction Item Component ---
 interface TransactionItemProps {
-	item: Transaction;
+	item: TransactionData;
 	onPress: () => void;
 }
-const TransactionItem: React.FC<TransactionItemProps> = ({ item, onPress }) => (
-	<TouchableOpacity
-		style={styles.transactionItemCard}
-		onPress={onPress}
-		activeOpacity={0.7}>
-		<Text style={styles.transactionStatusIcon}>
-			{item.statusIconPlaceholder}
-		</Text>
-		<View style={styles.transactionDetails}>
-			<Text style={styles.transactionType} numberOfLines={1}>
-				{item.type}
-			</Text>
-			<Text style={styles.transactionDateTime}>{item.dateTime}</Text>
-		</View>
-		<Text style={[styles.transactionAmount, { color: item.amountColor }]}>
-			{item.amount}
-		</Text>
-	</TouchableOpacity>
-);
 
-interface PaymentMethodItemProps {
-	item: PaymentMethod;
-	onPress?: () => void;
-} // onPress for future "Manage"
-const PaymentMethodItem: React.FC<PaymentMethodItemProps> = ({
-	item,
-	onPress,
-}) => (
-	<View style={styles.paymentMethodCard}>
-		<Text style={styles.paymentMethodIcon}>
-			{item.iconPlaceholder || "💳"}
-		</Text>
-		<View style={styles.paymentMethodDetails}>
-			<Text style={styles.paymentMethodType}>
-				{item.type} •••• {item.last4}
-			</Text>
-			{item.expiry && (
-				<Text style={styles.paymentMethodExpiry}>
-					Expires: {item.expiry}
+const TransactionItem: React.FC<TransactionItemProps> = ({ item, onPress }) => {
+	const isCredit = item.type === "credit";
+	const amountColor = isCredit ? colors.successDark : colors.errorDark;
+	const sign = isCredit ? "+" : "-";
+	const icon = isCredit ? "↓" : "↑"; // Arrow down for credit (money in), arrow up for debit (money out)
+
+	return (
+		<TouchableOpacity
+			style={styles.transactionItem}
+			onPress={onPress}
+			activeOpacity={0.7}>
+			<View
+				style={[
+					styles.transactionIconContainer,
+					{
+						backgroundColor: isCredit
+							? colors.successLight
+							: colors.errorLight,
+					},
+				]}>
+				<Text style={[styles.transactionIcon, { color: amountColor }]}>
+					{icon}
 				</Text>
-			)}
-		</View>
-		{/* <TouchableOpacity onPress={onPress}><Text>Manage</Text></TouchableOpacity> */}
-	</View>
-);
-// --- End Reusable ---
+			</View>
+			<View style={styles.transactionDetails}>
+				<Text style={styles.transactionDescription} numberOfLines={1}>
+					{item.description || "Transaction"}
+				</Text>
+				<Text style={styles.transactionDate}>
+					{new Date(item.createdAt).toLocaleDateString(undefined, {
+						day: "numeric",
+						month: "short",
+						year: "numeric",
+					})}{" "}
+					-{" "}
+					{new Date(item.createdAt).toLocaleTimeString([], {
+						hour: "2-digit",
+						minute: "2-digit",
+						hour12: true,
+					})}
+				</Text>
+				{item.status !== "successful" && (
+					<Text
+						style={[
+							styles.transactionStatus,
+							styles[
+								`status${
+									item.status.charAt(0).toUpperCase() +
+									item.status.slice(1)
+								}` as keyof typeof styles
+							],
+						]}>
+						Status: {item.status}
+					</Text>
+				)}
+			</View>
+			<Text style={[styles.transactionAmount, { color: amountColor }]}>
+				{sign}₹{(item.amount / 100).toFixed(2)}
+			</Text>
+		</TouchableOpacity>
+	);
+};
+// --- End Transaction Item ---
 
-type WalletScreenNavigationProp = StackNavigationProp<
+type ScreenNavigationProp = StackNavigationProp<
 	WalletStackParamList,
 	"WalletPaymentsScreen"
 >;
 
 interface WalletPaymentsScreenProps {
-	navigation: WalletScreenNavigationProp;
+	navigation: ScreenNavigationProp;
 }
 
 const WalletPaymentsScreen: React.FC<WalletPaymentsScreenProps> = ({
 	navigation,
 }) => {
-	const [balance, setBalance] = useState(DUMMY_BALANCE);
-	const [recentTransactions, setRecentTransactions] = useState(
-		DUMMY_TRANSACTIONS.slice(0, 3)
-	); // Show initial few
-	const [paymentMethods, setPaymentMethods] = useState(DUMMY_PAYMENT_METHODS);
+	const dispatch = useDispatch<AppDispatch>();
+	const {
+		walletData,
+		transactions,
+		pagination,
+		isLoadingWallet,
+		isLoadingTransactions,
+		errorWallet,
+		errorTransactions,
+	} = useSelector((state: RootState) => state.wallet);
 
-	// The header with "Wallet & Payments" and back arrow is handled by WalletStackNavigator
-	// using customStackScreenOptions.
+	const loadData = useCallback(
+		(isRefreshing = false) => {
+			// The check for isLoadingWallet/isLoadingTransactions is inside the function,
+			// so it doesn't strictly need to be a dependency for the callback's identity.
+			if (!isRefreshing && (isLoadingWallet || isLoadingTransactions)) {
+				return;
+			}
+			console.log(
+				"WalletPaymentsScreen: Fetching wallet data and initial transactions..."
+			);
+			dispatch(fetchUserWalletThunk());
+			dispatch(fetchWalletTransactionsThunk({ page: 1, limit: 5 }));
+		},
+		[dispatch]
+	);
+	useEffect(() => {
+		const unsubscribeFocus = navigation.addListener("focus", () => {
+			console.log("WalletPaymentsScreen: Focused. Reloading data.");
+			loadData(true);
+		});
+		// loadData(); // Initial load is handled by the focus listener the first time too
+		return unsubscribeFocus;
+	}, [navigation, loadData]);
 
-	const handleAddMoney = () => navigation.navigate("AddMoneyScreen");
-	const handleSendMoney = () => Alert.alert("Action", "Send Money Pressed");
-	const handleRequestMoney = () =>
-		Alert.alert("Action", "Request Money Pressed");
-	const handleViewTransactionHistory = () =>
+	const handleAddMoney = () => {
+		navigation.navigate("AddMoneyScreen");
+	};
+
+	const handleViewAllTransactions = () => {
 		navigation.navigate("TransactionHistoryScreen");
-	const handleAddPaymentMethod = () =>
-		navigation.navigate("AddPaymentMethodScreen");
-	const handleContactSupport = () =>
-		Alert.alert("Support", "Contact Support Pressed");
+	};
 
-	return (
-		<ScrollView
-			style={styles.screenContainer}
-			contentContainerStyle={styles.scrollContentContainer}>
-			{/* Wallet Balance Section */}
-			<View style={styles.balanceSection}>
-				<Text style={styles.availableBalanceLabel}>
-					Available Balance
-				</Text>
-				<Text style={styles.balanceAmount}>{balance}</Text>
+	const handleTransactionPress = (transaction: TransactionData) => {
+		// For now, just an alert. Later, can navigate to a TransactionDetailScreen.
+		Alert.alert(
+			`Transaction: ${transaction._id}`,
+			`Type: ${transaction.type}\nAmount: ${(
+				transaction.amount / 100
+			).toFixed(2)}\nStatus: ${transaction.status}\nDescription: ${
+				transaction.description
+			}\nDate: ${new Date(transaction.createdAt).toLocaleString()}`
+		);
+	};
+
+	const renderHeader = () => (
+		<>
+			<View style={styles.balanceCard}>
+				<Text style={styles.balanceLabel}>Current Wallet Balance</Text>
+				{isLoadingWallet && !walletData ? (
+					<ActivityIndicator
+						color={colors.white}
+						style={{ marginVertical: spacing.m }}
+					/>
+				) : errorWallet ? (
+					<View style={styles.errorContainer}>
+						<Text style={styles.errorTextSmall}>
+							Error: {errorWallet}
+						</Text>
+						<TouchableOpacity
+							onPress={() => dispatch(fetchUserWalletThunk())}
+							style={styles.retryButtonSmall}>
+							<Text style={styles.retryTextSmall}>Retry</Text>
+						</TouchableOpacity>
+					</View>
+				) : walletData ? (
+					<Text style={styles.balanceAmount}>
+						₹{(walletData.balance / 100).toFixed(2)}
+					</Text>
+				) : (
+					<Text style={styles.balanceAmount}>₹0.00</Text> // Fallback if no data and not loading/error
+				)}
 				<PrimaryButton
 					title="Add Money"
 					onPress={handleAddMoney}
 					style={styles.addMoneyButton}
-					// iconLeft={<Text style={{color: colors.white, marginRight: spacing.s, fontSize: 18}}>+</Text>}
+					iconLeft={<Text style={styles.addMoneyIcon}>💰</Text>}
 				/>
 			</View>
-
-			{/* Quick Actions */}
-			<View style={styles.quickActionsContainer}>
-				<QuickActionButton
-					label="Send Money"
-					iconPlaceholder="💸"
-					onPress={handleSendMoney}
-				/>
-				<QuickActionButton
-					label="Request Money"
-					iconPlaceholder="📨"
-					onPress={handleRequestMoney}
-				/>
-				<QuickActionButton
-					label="History"
-					iconPlaceholder="📜"
-					onPress={handleViewTransactionHistory}
-				/>
+			<View style={styles.sectionHeader}>
+				<Text style={styles.sectionTitle}>Recent Transactions</Text>
+				{transactions.length > 0 &&
+					pagination &&
+					pagination.totalTransactions > (pagination.limit || 5) && (
+						<TouchableOpacity onPress={handleViewAllTransactions}>
+							<Text style={styles.viewAllLink}>View All</Text>
+						</TouchableOpacity>
+					)}
 			</View>
+		</>
+	);
 
-			{/* Recent Transactions */}
-			<View style={styles.sectionCard}>
-				<View style={styles.sectionHeader}>
-					<Text style={styles.sectionTitle}>Recent Transactions</Text>
-					<TouchableOpacity onPress={handleViewTransactionHistory}>
-						<Text style={styles.viewAllLink}>View All</Text>
-					</TouchableOpacity>
-				</View>
-				{recentTransactions.map((item) => (
-					<TransactionItem
-						key={item.id}
-						item={item}
-						onPress={() => console.log("View tx:", item.id)}
+	const ListEmptyComponentContent = () => {
+		if (isLoadingTransactions) return null; // Loader handled by main FlatList refreshControl or header for initial
+		if (errorTransactions) {
+			return (
+				<View style={styles.emptyStateContainer}>
+					<Text style={styles.errorText}>
+						Error: {errorTransactions}
+					</Text>
+					<PrimaryButton
+						title="Retry Transactions"
+						onPress={() =>
+							dispatch(
+								fetchWalletTransactionsThunk({
+									page: 1,
+									limit: 5,
+								})
+							)
+						}
+						style={{ marginTop: spacing.m }}
 					/>
-				))}
-			</View>
-
-			{/* Payment Methods */}
-			<View style={styles.sectionCard}>
-				<Text style={styles.sectionTitle}>Payment Methods</Text>
-				{paymentMethods.map((item) => (
-					<PaymentMethodItem key={item.id} item={item} />
-				))}
-				<TouchableOpacity
-					style={styles.addPaymentButton}
-					onPress={handleAddPaymentMethod}>
-					<Text style={styles.addPaymentButtonIcon}>+</Text>
-					<Text style={styles.addPaymentButtonText}>
-						Add Payment Method
-					</Text>
-				</TouchableOpacity>
-			</View>
-
-			{/* Support Section */}
-			<View style={styles.supportSection}>
-				<Text style={styles.supportText}>
-					Need Help? Contact our support team
+				</View>
+			);
+		}
+		return (
+			<View style={styles.emptyStateContainer}>
+				<Text style={styles.emptyStateIcon}>🧾</Text>
+				<Text style={styles.emptyStateText}>No transactions yet.</Text>
+				<Text style={styles.emptyStateSubtext}>
+					Your recent wallet activity will appear here.
 				</Text>
-				<TouchableOpacity
-					style={styles.contactSupportButton}
-					onPress={handleContactSupport}>
-					<Text style={styles.contactSupportButtonText}>
-						Contact Support
-					</Text>
-				</TouchableOpacity>
 			</View>
-		</ScrollView>
+		);
+	};
+
+	return (
+		<FlatList
+			ListHeaderComponent={renderHeader}
+			data={transactions} // Display only the first few transactions fetched initially
+			renderItem={({ item }) => (
+				<TransactionItem
+					item={item}
+					onPress={() => handleTransactionPress(item)}
+				/>
+			)}
+			keyExtractor={(item) => item._id}
+			style={styles.screenContainer}
+			contentContainerStyle={styles.listContentContainer}
+			showsVerticalScrollIndicator={false}
+			ListEmptyComponent={ListEmptyComponentContent}
+			refreshControl={
+				<RefreshControl
+					refreshing={
+						isLoadingWallet ||
+						(isLoadingTransactions && transactions.length === 0)
+					} // Show when either is loading initially
+					onRefresh={() => loadData(true)}
+					colors={[colors.primary]}
+					tintColor={colors.primary}
+				/>
+			}
+			// Pagination for recent transactions on this screen is not implemented yet.
+			// For full history, user goes to TransactionHistoryScreen.
+		/>
 	);
 };
 
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		backgroundColor: colors.backgroundMain || "#F4F6F8",
 	},
-	scrollContentContainer: { paddingBottom: spacing.xl },
-	balanceSection: {
-		backgroundColor: colors.white,
-		padding: spacing.l,
-		alignItems: "center",
-		borderBottomLeftRadius: borderRadius.xl,
-		borderBottomRightRadius: borderRadius.xl,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 4,
-		elevation: 3,
-		marginBottom: spacing.m,
+	listContentContainer: {
+		paddingBottom: spacing.xl,
+		flexGrow: 1 /* Ensure empty component can center */,
 	},
-	availableBalanceLabel: {
-		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
-		marginBottom: spacing.xs,
-	},
-	balanceAmount: {
-		fontSize: typography.fontSizes.xxxl + 4,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
-		marginBottom: spacing.l,
-	},
-	addMoneyButton: {
-		backgroundColor: colors.primary,
-		paddingHorizontal: spacing.xl,
-	}, // Green button
-
-	quickActionsContainer: {
-		flexDirection: "row",
-		justifyContent: "space-around",
-		paddingVertical: spacing.m,
-		paddingHorizontal: spacing.s,
-		backgroundColor: colors.white,
+	balanceCard: {
+		backgroundColor: colors.primaryDark,
+		paddingHorizontal: spacing.l,
+		paddingVertical: spacing.xl,
 		marginHorizontal: spacing.m,
-		borderRadius: borderRadius.l,
-		marginBottom: spacing.m,
-		elevation: 2,
-	},
-	quickActionButton: { alignItems: "center", flex: 1 },
-	quickActionIconContainer: {
-		width: 50,
-		height: 50,
-		borderRadius: 25,
-		backgroundColor: colors.primaryLight || "#E6F7FF",
-		justifyContent: "center",
+		marginTop: spacing.m,
+		marginBottom: spacing.l,
+		borderRadius: borderRadius.xl,
 		alignItems: "center",
-		marginBottom: spacing.xs,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 3 },
+		shadowOpacity: 0.2,
+		shadowRadius: 5,
+		elevation: 6,
 	},
-	quickActionIcon: { fontSize: 22, color: colors.primary },
-	quickActionLabel: {
-		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
+	balanceLabel: {
+		fontSize: typography.fontSizes.m,
+		color: colors.whiteAlpha70 || "rgba(255,255,255,0.7)",
+		marginBottom: spacing.xs,
 		fontWeight: typography.fontWeights.medium,
 	},
-
-	sectionCard: {
-		backgroundColor: colors.white,
-		borderRadius: borderRadius.l,
-		padding: spacing.m,
-		marginHorizontal: spacing.m,
-		marginBottom: spacing.m,
-		elevation: 2,
+	balanceAmount: {
+		fontSize: typography.fontSizes.xxxl + 12,
+		fontWeight: typography.fontWeights.bold,
+		color: colors.white,
+		marginBottom: spacing.l,
 	},
+	addMoneyButton: { backgroundColor: colors.primary, width: "90%" },
+	addMoneyIcon: { color: colors.white, marginRight: spacing.s, fontSize: 18 },
 	sectionHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
+		paddingHorizontal: spacing.m + spacing.xs,
+		marginTop: spacing.s,
 		marginBottom: spacing.s,
 	},
 	sectionTitle: {
@@ -360,113 +326,102 @@ const styles = StyleSheet.create({
 	viewAllLink: {
 		fontSize: typography.fontSizes.s,
 		color: colors.primary,
-		fontWeight: typography.fontWeights.medium,
+		fontWeight: typography.fontWeights.semiBold,
 	},
-
-	transactionItemCard: {
+	transactionItem: {
 		flexDirection: "row",
 		alignItems: "center",
+		backgroundColor: colors.white,
+		paddingHorizontal: spacing.m,
 		paddingVertical: spacing.m,
 		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault || "#EAEAEA",
+		marginHorizontal: spacing.m,
+		borderRadius: borderRadius.m,
+		marginBottom: spacing.xs,
 	},
-	// Last item should remove borderBottomWidth if preferred styles.transactionItemCardLast: { borderBottomWidth: 0 },
-	transactionStatusIcon: {
-		fontSize: 18,
+	transactionIconContainer: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		justifyContent: "center",
+		alignItems: "center",
 		marginRight: spacing.m,
-		width: 20,
-		textAlign: "center",
 	},
-	transactionDetails: { flex: 1, marginRight: spacing.s },
-	transactionType: {
+	transactionIcon: { fontSize: 18, fontWeight: "bold" },
+	transactionDetails: { flex: 1 },
+	transactionDescription: {
 		fontSize: typography.fontSizes.m,
 		color: colors.textPrimary,
 		fontWeight: typography.fontWeights.medium,
 	},
-	transactionDateTime: {
-		fontSize: typography.fontSizes.s,
+	transactionDate: {
+		fontSize: typography.fontSizes.xs,
 		color: colors.textSecondary,
 		marginTop: spacing.xxs,
 	},
+	transactionStatus: {
+		fontSize: typography.fontSizes.xs,
+		fontStyle: "italic",
+		marginTop: spacing.xxs,
+	},
+	statusPending: { color: colors.warningDark },
+	statusFailed: { color: colors.errorDark },
+	statusCancelled: { color: colors.greyDark },
 	transactionAmount: {
 		fontSize: typography.fontSizes.m,
 		fontWeight: typography.fontWeights.bold,
 	},
-
-	paymentMethodCard: {
-		flexDirection: "row",
+	centeredLoader: {
+		flex: 1,
+		justifyContent: "flex-start",
 		alignItems: "center",
-		paddingVertical: spacing.m,
-		borderBottomWidth: StyleSheet.hairlineWidth,
-		borderBottomColor: colors.borderDefault || "#EEE",
-	},
-	paymentMethodIcon: {
-		fontSize: 24,
-		marginRight: spacing.m,
-		color: colors.textPrimary,
-		width: 30,
-		textAlign: "center",
-	}, // Placeholder size
-	paymentMethodDetails: { flex: 1 },
-	paymentMethodType: {
-		fontSize: typography.fontSizes.m,
-		color: colors.textPrimary,
-		fontWeight: typography.fontWeights.medium,
-	},
-	paymentMethodExpiry: {
-		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
-	},
-	addPaymentButton: {
-		flexDirection: "row",
-		alignItems: "center",
+		paddingTop: spacing.l,
+	}, // Changed to flex-start for header
+	loadingText: { marginTop: spacing.s, color: colors.textMedium },
+	emptyStateContainer: {
+		flexGrow: 1,
 		justifyContent: "center",
-		paddingVertical: spacing.m,
-		marginTop: spacing.s,
-		borderRadius: borderRadius.m,
-		borderWidth: 1.5,
-		borderColor: colors.primary,
-		borderStyle: "dashed",
-	},
-	addPaymentButtonIcon: {
-		fontSize: typography.fontSizes.l,
-		color: colors.primary,
-		marginRight: spacing.s,
-		fontWeight: "bold",
-	},
-	addPaymentButtonText: {
-		fontSize: typography.fontSizes.m,
-		color: colors.primary,
-		fontWeight: typography.fontWeights.semiBold,
-	},
-
-	supportSection: {
 		alignItems: "center",
-		padding: spacing.l,
-		backgroundColor: colors.white,
-		marginHorizontal: spacing.m,
-		borderRadius: borderRadius.l,
-		marginTop: spacing.m,
-		elevation: 2,
+		padding: spacing.xl,
+		minHeight: 200,
 	},
-	supportText: {
-		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
+	emptyStateIcon: {
+		fontSize: 48,
+		color: colors.greyMedium,
 		marginBottom: spacing.m,
+	},
+	emptyStateText: {
+		fontSize: typography.fontSizes.l,
+		color: colors.textMedium,
+		textAlign: "center",
+		marginBottom: spacing.xs,
+	},
+	emptyStateSubtext: {
+		fontSize: typography.fontSizes.s,
+		color: colors.textLight,
 		textAlign: "center",
 	},
-	contactSupportButton: {
-		paddingVertical: spacing.s + 2,
-		paddingHorizontal: spacing.xl,
-		borderRadius: borderRadius.pill,
-		borderWidth: 1.5,
-		borderColor: colors.primary,
-	},
-	contactSupportButtonText: {
-		color: colors.primary,
+	errorText: {
+		color: colors.error,
+		textAlign: "center",
+		marginVertical: spacing.s,
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.semiBold,
 	},
+	errorTextSmall: {
+		color: colors.whiteAlpha70,
+		textAlign: "center",
+		fontSize: typography.fontSizes.s,
+	},
+	retryButtonSmall: {
+		marginTop: spacing.xs,
+		paddingVertical: spacing.xxs,
+		paddingHorizontal: spacing.s,
+		borderRadius: borderRadius.s,
+		borderColor: colors.whiteAlpha70,
+		borderWidth: 1,
+	},
+	retryTextSmall: { color: colors.white, fontSize: typography.fontSizes.xs },
 });
 
 export default WalletPaymentsScreen;

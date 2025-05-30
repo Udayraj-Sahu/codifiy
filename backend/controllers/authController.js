@@ -2,8 +2,8 @@
 const User = require("../models/User"); // Import the User model
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
-const asyncHandler = require('express-async-handler');
-
+const asyncHandler = require("express-async-handler");
+const Wallet = require("../models/Wallet"); // <<< ADD THIS IMPORT
 // Helper function to generate JWT
 const generateToken = (id) => {
 	return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -41,6 +41,34 @@ exports.signupUser = async (req, res) => {
 		// 4. Save user to database
 		await user.save();
 
+		if (user) {
+			// Create a wallet for the new user
+			try {
+				let wallet = await Wallet.findOne({ user: user._id }); // Check if by some chance it exists
+				if (!wallet) {
+					wallet = new Wallet({
+						user: user._id,
+						balance: 0,
+						currency: "INR",
+					});
+					await wallet.save();
+					console.log(
+						`Wallet created successfully for new user: ${user._id}`
+					);
+				} else {
+					console.log(
+						`Wallet already existed for user ${user._id} during signup.`
+					);
+				}
+			} catch (walletError) {
+				// Log the error, but don't necessarily fail the signup if wallet creation fails.
+				// This could be handled by a retry mechanism or lazy wallet creation on first access.
+				console.error(
+					`Failed to create wallet for user ${user._id}:`,
+					walletError
+				);
+			}
+		}
 		// 5. Generate JWT
 		const token = generateToken(user._id);
 
@@ -60,42 +88,47 @@ exports.signupUser = async (req, res) => {
 	}
 };
 exports.updateUserPushToken = asyncHandler(async (req, res, next) => {
-    const { token } = req.body;
-    const userId = req.user.id; // From protect middleware
+	const { token } = req.body;
+	const userId = req.user.id; // From protect middleware
 
-    if (!token || typeof token !== 'string') {
-        res.status(400);
-        throw new Error('Push token is required and must be a string.');
-    }
+	if (!token || typeof token !== "string") {
+		res.status(400);
+		throw new Error("Push token is required and must be a string.");
+	}
 
-    // Basic validation for Expo token format (optional but good)
-    // Expo tokens usually start with ExponentPushToken[...] or similar
-    if (!token.startsWith('ExponentPushToken[') && !token.startsWith('ExpoPushToken[')) {
-        // Note: Format might vary or other services might be used. This is a basic check.
-        // Consider if you need to support other token types or be less strict.
-        console.warn(`Received potentially invalid push token format: ${token}`);
-        // Depending on strictness, you might throw an error or just proceed.
-        // For now, let's proceed but log a warning.
-    }
+	// Basic validation for Expo token format (optional but good)
+	// Expo tokens usually start with ExponentPushToken[...] or similar
+	if (
+		!token.startsWith("ExponentPushToken[") &&
+		!token.startsWith("ExpoPushToken[")
+	) {
+		// Note: Format might vary or other services might be used. This is a basic check.
+		// Consider if you need to support other token types or be less strict.
+		console.warn(
+			`Received potentially invalid push token format: ${token}`
+		);
+		// Depending on strictness, you might throw an error or just proceed.
+		// For now, let's proceed but log a warning.
+	}
 
-    const user = await User.findById(userId);
+	const user = await User.findById(userId);
 
-    if (!user) {
-        res.status(404); // Should not happen if protect middleware works
-        throw new Error('User not found.');
-    }
+	if (!user) {
+		res.status(404); // Should not happen if protect middleware works
+		throw new Error("User not found.");
+	}
 
-    // If you are storing multiple tokens, the logic here would be to add to an array
-    // and ensure no duplicates, or manage a list of devices.
-    // For a single token:
-    user.expoPushToken = token;
-    await user.save();
+	// If you are storing multiple tokens, the logic here would be to add to an array
+	// and ensure no duplicates, or manage a list of devices.
+	// For a single token:
+	user.expoPushToken = token;
+	await user.save();
 
-    res.status(200).json({
-        success: true,
-        message: 'Push token updated successfully.',
-        expoPushToken: user.expoPushToken
-    });
+	res.status(200).json({
+		success: true,
+		message: "Push token updated successfully.",
+		expoPushToken: user.expoPushToken,
+	});
 });
 
 exports.updateUserProfile = asyncHandler(async (req, res, next) => {

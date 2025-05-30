@@ -1,6 +1,7 @@
 // src/navigation/types.ts
 import { NavigatorScreenParams, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { PriceCalculationResponse } from "../store/slices/bookingSlice";
 
 // Interface for filters if you haven't defined it elsewhere
 export interface AppliedFilters {
@@ -40,18 +41,28 @@ export type AuthStackParamList = {
 export type ExploreStackParamList = {
 	Explore: { appliedFilters?: AppliedFilters } | undefined;
 	BikeDetails: { bikeId: string };
-	Booking: { bikeId: string; startDate?: string; endDate?: string };
+	Booking: {
+		bikeId: string;
+		startDate?: string;
+		endDate?: string;
+		appliedPromoCodeDetails?: PriceCalculationResponse | undefined;
+	};
 	ApplyPromoCode: {
-		/* ... */
+		currentBikeId?: string;
+		currentSubtotal?: number;
+		startDate?: string; // Pass these through if needed by apply promo logic
+		endDate?: string;
 	};
 	BookingConfirmation: { bookingId: string };
-	Filter: undefined; // This is the modal for setting filters
-	DocumentUploadScreen_FromExplore?: { fromBooking?: boolean };
+	Filter: undefined;
+	DocumentUploadScreen_FromExplore?: {
+		// Updated params for this route
+		fromBooking?: boolean;
+		bookingAttemptDetails?: BookingAttemptDetails; // Pass attempted booking info
+	};
 	SearchResults: {
-		// NEW
-		query?: string; // The search query text
-		filters?: AppliedFilters; // The filters applied
-		// You can add more params like initialSortOption if needed
+		query?: string;
+		filters?: AppliedFilters;
 	};
 };
 // == My Rentals/Bookings Tab ==
@@ -157,7 +168,8 @@ export type WalletStackParamList = {
 	WalletPaymentsScreen: undefined; // Main screen for wallet
 	AddMoneyScreen: undefined; // For adding money to wallet
 	TransactionHistoryScreen: undefined; // For full transaction list
-	AddPaymentMethodScreen: undefined; // For adding new cards/UPI etc.
+	AddPaymentMethodScreen: undefined; 
+	// For adding new cards/UPI etc.
 	// ... other wallet related screens
 };
 
@@ -189,3 +201,18 @@ export interface DocumentUploadScreenProps {
 	navigation: DocumentUploadScreenNavigationProp;
 	route: DocumentUploadScreenRouteProp;
 }
+
+export interface BookingAttemptDetails {
+	// New interface for clarity
+	bikeId: string;
+	startDate: string; // ISO string
+	endDate: string; // ISO string
+	// You can add other relevant details like priceDetails if needed
+}
+
+export type TabBarIconProps = {
+	name: keyof UserTabParamList; // The name of the route/tab
+	focused: boolean; // Whether the tab is currently focused
+	color: string; // The color to use for the icon (provided by React Navigation)
+	size: number; // The size for the icon (provided by React Navigation)
+};

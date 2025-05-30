@@ -1,230 +1,441 @@
 // src/screens/App/Home/NotificationsScreen.tsx
-import React, { useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import { StackNavigationProp } from "@react-navigation/stack";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList, // Ideal for grouped data
-  TouchableOpacity,
-  // ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { HomeStackParamList } from '../../../navigation/types'; // Adjust path
-import { colors, spacing, typography, borderRadius } from '../../../theme'; // Adjust path
-// For this example, NotificationItem is defined above. In a real app, import it:
-// import NotificationItem, { NotificationData } from '../../../components/NotificationItem';
+	ActivityIndicator,
+	Alert,
+	RefreshControl,
+	SectionList,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from "react-native";
+import PrimaryButton from "../../../components/common/PrimaryButton";
+import { useDispatch, useSelector } from "react-redux";
+import { HomeStackParamList } from "../../../navigation/types";
+import {
+	fetchUserNotificationsThunk,
+	markAllNotificationsAsReadThunk,
+	markNotificationAsReadThunk,
+	resetNotifications,
+	NotificationData as StoreNotificationData, // Use type from slice
+} from "../../../store/slices/notificationSlice";
+import { AppDispatch, RootState } from "../../../store/store";
+import { colors, spacing, typography } from "../../../theme";
 
-// --- Re-defining NotificationItem and its styles here for a single file example ---
-// (Ideally, NotificationItem would be in its own file: src/components/NotificationItem.tsx)
-interface NotificationData { /* ... same as above ... */
-  id: string; iconPlaceholder: string; title: string; subtitle: string;
-  timestamp: string; detailsLinkText?: string; onPressDetails?: () => void; isRead?: boolean;
-}
-const NotificationItem: React.FC<{ item: NotificationData }> = ({ item }) => ( /* ... same JSX as above ... */
-  <View style={[styles.notificationItemContainer, !item.isRead && styles.unreadNotification]}>
-    <View style={styles.iconWrapper}><Text style={styles.notificationIcon}>{item.iconPlaceholder}</Text></View>
-    <View style={styles.notificationContent}>
-      <Text style={styles.notificationTitle} numberOfLines={1}>{item.title}</Text>
-      <Text style={styles.notificationSubtitle} numberOfLines={2}>{item.subtitle}</Text>
-      <View style={styles.notificationFooter}>
-        <Text style={styles.timestamp}>{item.timestamp}</Text>
-        {item.detailsLinkText && item.onPressDetails && (
-          <TouchableOpacity onPress={item.onPressDetails}><Text style={styles.detailsLink}>{item.detailsLinkText}</Text></TouchableOpacity>
-        )}
-      </View>
-    </View>
-  </View>
-);
-// --- End Inline NotificationItem ---
-
-
-// --- Dummy Data ---
-const DUMMY_NOTIFICATIONS: NotificationData[] = [
-  // Today
-  { id: 'n1', iconPlaceholder: '🚲', title: 'Booking Confirmed!', subtitle: 'Your ride with Urban Cruiser is booked for today at 2:00 PM.', timestamp: '10:45 AM', detailsLinkText: 'View Details', onPressDetails: () => Alert.alert("View Details", "Navigate to booking BKY456"), isRead: false },
-  { id: 'n2', iconPlaceholder: '✅', title: 'License Verified', subtitle: 'Your Driver\'s License has been successfully verified.', timestamp: '09:15 AM', isRead: true },
-  // Yesterday
-  { id: 'n3', iconPlaceholder: '💳', title: 'Payment Successful', subtitle: 'Payment of ₹450 for Booking #BKY123 was successful.', timestamp: 'Yesterday, 6:30 PM', detailsLinkText: 'View Receipt', onPressDetails: () => Alert.alert("View Receipt", "For booking BKY123"), isRead: true },
-  // Earlier
-  { id: 'n4', iconPlaceholder: '🎉', title: 'Weekend Special!', subtitle: 'Get 25% off on all mountain bikes this weekend. Use code WEEKEND25.', timestamp: 'May 23, 2025', isRead: true },
-  { id: 'n5', iconPlaceholder: '⚠️', title: 'Upcoming Ride Reminder', subtitle: 'Your booking for City Hopper starts in 1 hour.', timestamp: 'May 22, 2025', detailsLinkText: 'View Booking', onPressDetails: () => Alert.alert("View Booking", "Navigate to booking BKY090"), isRead: false },
-];
-
-interface GroupedNotification {
-  title: string; // "Today", "Yesterday", "Earlier"
-  data: NotificationData[];
+// --- NotificationItem Component ---
+// (Can be moved to a separate file: src/components/common/NotificationItem.tsx)
+// Mapping StoreNotificationData to NotificationItemData for display
+interface NotificationItemDisplayData {
+	id: string; // maps to _id
+	iconPlaceholder: string; // Derived or from notification.type/data
+	title: string;
+	subtitle: string; // maps to body
+	timestamp: string; // Formatted createdAt
+	detailsLinkText?: string;
+	onPressDetails?: () => void;
+	isRead?: boolean;
 }
 
-const groupNotifications = (notifications: NotificationData[]): GroupedNotification[] => {
-  // This is a simplified grouping. Real grouping would compare dates.
-  // For now, let's use the dummy structure.
-  const today = notifications.filter(n => n.timestamp.includes('AM') || n.timestamp.includes('PM')); // Simplistic
-  const yesterday = notifications.filter(n => n.timestamp.includes('Yesterday'));
-  const earlier = notifications.filter(n => !today.includes(n) && !yesterday.includes(n));
+const NotificationItem: React.FC<{
+	item: NotificationItemDisplayData;
+	onMarkRead: (id: string) => void;
+}> = ({ item, onMarkRead }) => {
+	const handlePress = () => {
+		if (!item.isRead) {
+			onMarkRead(item.id);
+		}
+		if (item.onPressDetails) {
+			item.onPressDetails();
+		}
+	};
 
-  const grouped: GroupedNotification[] = [];
-  if (today.length > 0) grouped.push({ title: 'Today', data: today });
-  if (yesterday.length > 0) grouped.push({ title: 'Yesterday', data: yesterday });
-  if (earlier.length > 0) grouped.push({ title: 'Earlier', data: earlier });
-  return grouped;
+	return (
+		<TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
+			<View
+				style={[
+					styles.notificationItemContainer,
+					!item.isRead && styles.unreadNotification,
+				]}>
+				<View style={styles.iconWrapper}>
+					<Text style={styles.notificationIcon}>
+						{item.iconPlaceholder}
+					</Text>
+				</View>
+				<View style={styles.notificationContent}>
+					<Text style={styles.notificationTitle} numberOfLines={1}>
+						{item.title}
+					</Text>
+					<Text style={styles.notificationSubtitle} numberOfLines={2}>
+						{item.subtitle}
+					</Text>
+					<View style={styles.notificationFooter}>
+						<Text style={styles.timestamp}>{item.timestamp}</Text>
+						{item.detailsLinkText && ( // Only show if detailsLinkText is present
+							<Text style={styles.detailsLink}>
+								{item.detailsLinkText}
+							</Text>
+						)}
+					</View>
+				</View>
+			</View>
+		</TouchableOpacity>
+	);
 };
-// --- End Dummy Data ---
+// --- End NotificationItem ---
 
-type NotificationsScreenNavigationProp = StackNavigationProp<HomeStackParamList, 'NotificationsScreen'>;
-// type NotificationsScreenRouteProp = RouteProp<HomeStackParamList, 'NotificationsScreen'>;
-
-interface NotificationsScreenProps {
-  navigation: NotificationsScreenNavigationProp;
-  // route: NotificationsScreenRouteProp;
+interface GroupedNotificationDisplay {
+	title: string;
+	data: NotificationItemDisplayData[];
 }
 
-const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation }) => {
-  const [notifications, setNotifications] = useState<GroupedNotification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const mapAndGroupNotifications = (
+	notifications: StoreNotificationData[]
+): GroupedNotificationDisplay[] => {
+	const getIconForType = (type?: string): string => {
+		switch (type) {
+			case "booking_confirmed":
+				return "✅";
+			case "booking_cancelled":
+				return "❌";
+			case "ride_reminder":
+				return "🔔";
+			case "promo":
+				return "🎉";
+			case "document_verified":
+				return "📄";
+			case "document_rejected":
+				return "⚠️";
+			default:
+				return "ℹ️";
+		}
+	};
+	const formatTimestamp = (isoDate: string): string => {
+		const date = new Date(isoDate);
+		const now = new Date();
+		const diffSeconds = Math.round((now.getTime() - date.getTime()) / 1000);
+		if (diffSeconds < 60) return `${diffSeconds}s ago`;
+		const diffMinutes = Math.round(diffSeconds / 60);
+		if (diffMinutes < 60) return `${diffMinutes}m ago`;
+		const diffHours = Math.round(diffMinutes / 60);
+		if (diffHours < 24) return `${diffHours}h ago`;
+		if (diffHours < 48) return "Yesterday";
+		return date.toLocaleDateString(undefined, {
+			month: "short",
+			day: "numeric",
+		});
+	};
 
-  const handleMarkAllAsRead = () => {
-    Alert.alert("Mark All As Read", "All notifications would be marked as read.");
-    // TODO: Implement logic to mark all as read in state and backend
-    const updatedNotifications = DUMMY_NOTIFICATIONS.map(n => ({ ...n, isRead: true }));
-    setNotifications(groupNotifications(updatedNotifications)); // Re-group to reflect read status
-  };
+	const mapped: NotificationItemDisplayData[] = notifications.map((n) => ({
+		id: n._id,
+		iconPlaceholder: getIconForType(n.type),
+		title: n.title,
+		subtitle: n.body,
+		timestamp: formatTimestamp(n.createdAt),
+		isRead: n.isRead,
+		// Example: Derive detailsLinkText and onPressDetails from n.data
+		detailsLinkText: n.data?.screen ? "View Details" : undefined,
+		onPressDetails: n.data?.screen
+			? () => {
+					console.log(
+						"Navigate to:",
+						n.data.screen,
+						"with params:",
+						n.data
+					);
+					// navigation.navigate(n.data.screen, n.data.params); // Requires navigation prop
+			  }
+			: undefined,
+	}));
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      // Title "Notifications" is likely set by the navigator options already
-      headerRight: () => (
-        <TouchableOpacity onPress={handleMarkAllAsRead} style={{ marginRight: spacing.m }}>
-          <Text style={styles.markAllReadLink}>Mark all as read</Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
+	// Simplified grouping by date for example (Today, Yesterday, Earlier)
+	const today: NotificationItemDisplayData[] = [];
+	const yesterday: NotificationItemDisplayData[] = [];
+	const earlier: NotificationItemDisplayData[] = [];
 
-  useEffect(() => {
-    // Simulate fetching notifications
-    setIsLoading(true);
-    setTimeout(() => {
-      setNotifications(groupNotifications(DUMMY_NOTIFICATIONS));
-      setIsLoading(false);
-    }, 500);
-  }, []);
+	mapped.forEach((n) => {
+		const createdAt = new Date(
+			notifications.find((orig) => orig._id === n.id)!.createdAt
+		); // Get original createdAt
+		const now = new Date();
+		const diffDays =
+			(now.setHours(0, 0, 0, 0) - createdAt.setHours(0, 0, 0, 0)) /
+			(1000 * 60 * 60 * 24);
 
+		if (diffDays === 0) today.push(n);
+		else if (diffDays === 1) yesterday.push(n);
+		else earlier.push(n);
+	});
 
-  const renderNotification = ({ item }: { item: NotificationData }) => (
-    <NotificationItem item={item} />
-  );
+	const grouped: GroupedNotificationDisplay[] = [];
+	if (today.length > 0) grouped.push({ title: "Today", data: today });
+	if (yesterday.length > 0)
+		grouped.push({ title: "Yesterday", data: yesterday });
+	if (earlier.length > 0) grouped.push({ title: "Earlier", data: earlier });
+	return grouped;
+};
 
-  const renderSectionHeader = ({ section: { title } }: { section: GroupedNotification }) => (
-    <Text style={styles.sectionHeader}>{title}</Text>
-  );
+type NotificationsScreenNavigationProp = StackNavigationProp<
+	HomeStackParamList,
+	"NotificationsScreen"
+>;
+interface NotificationsScreenProps {
+	navigation: NotificationsScreenNavigationProp;
+}
 
-  if (isLoading) {
-    return <View style={styles.centered}><Text>Loading notifications...</Text></View>;
-  }
+const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
+	navigation,
+}) => {
+	const dispatch = useDispatch<AppDispatch>();
+	const {
+		notifications: notificationsFromStore,
+		pagination,
+		unreadCount,
+		isLoading,
+		isLoadingMore,
+		error,
+	} = useSelector((state: RootState) => state.notifications);
 
-  if (notifications.length === 0) {
-    return <View style={styles.centered}><Text>No notifications yet.</Text></View>;
-  }
+	const groupedDisplayNotifications = useMemo(
+		() => mapAndGroupNotifications(notificationsFromStore),
+		[notificationsFromStore]
+	);
 
-  return (
-    <SectionList
-      sections={notifications}
-      keyExtractor={(item) => item.id}
-      renderItem={renderNotification}
-      renderSectionHeader={renderSectionHeader}
-      style={styles.screenContainer}
-      contentContainerStyle={styles.listContentContainer}
-      stickySectionHeadersEnabled={false} // Or true if you prefer
-      showsVerticalScrollIndicator={false}
-    />
-  );
+	const loadNotifications = useCallback(
+		(page = 1, isRefreshing = false) => {
+			if (!isRefreshing && page > 1 && isLoadingMore) return; // Don't fetch if already fetching more
+			if (!isRefreshing && page === 1 && isLoading) return; // Don't fetch if already loading initial
+			dispatch(fetchUserNotificationsThunk({ page }));
+		},
+		[dispatch, isLoading, isLoadingMore]
+	);
+
+	useEffect(() => {
+		dispatch(resetNotifications()); // Reset on mount to ensure fresh load
+		loadNotifications(1);
+		// Cleanup on unmount
+		return () => {
+			// dispatch(resetNotifications()); // Or based on your app's logic for persistence
+		};
+	}, [dispatch]); // loadNotifications dependency removed to prevent loop, called directly
+
+	const handleMarkAllAsRead = useCallback(async () => {
+		if (unreadCount > 0) {
+			const resultAction = await dispatch(
+				markAllNotificationsAsReadThunk()
+			);
+			if (markAllNotificationsAsReadThunk.rejected.match(resultAction)) {
+				Alert.alert(
+					"Error",
+					resultAction.payload || "Could not mark all as read."
+				);
+			}
+		}
+	}, [dispatch, unreadCount]);
+
+	const handleMarkOneAsRead = useCallback(
+		(notificationId: string) => {
+			dispatch(markNotificationAsReadThunk(notificationId));
+		},
+		[dispatch]
+	);
+
+	useLayoutEffect(() => {
+		navigation.setOptions({
+			headerRight: () =>
+				unreadCount > 0 ? ( // Only show if there are unread notifications
+					<TouchableOpacity
+						onPress={handleMarkAllAsRead}
+						style={{ marginRight: spacing.m }}>
+						<Text style={styles.markAllReadLink}>
+							Mark all as read
+						</Text>
+					</TouchableOpacity>
+				) : null,
+		});
+	}, [navigation, handleMarkAllAsRead, unreadCount]);
+
+	const renderNotificationDisplayItem = ({
+		item,
+	}: {
+		item: NotificationItemDisplayData;
+	}) => (
+		<NotificationItem
+			item={item}
+			onMarkRead={handleMarkOneAsRead} // Pass the handler
+		/>
+	);
+
+	const renderSectionHeader = ({
+		section: { title },
+	}: {
+		section: GroupedNotificationDisplay;
+	}) => <Text style={styles.sectionHeader}>{title}</Text>;
+
+	const onRefresh = () => {
+		dispatch(resetNotifications());
+		loadNotifications(1, true);
+	};
+
+	const onEndReached = () => {
+		if (
+			pagination &&
+			pagination.currentPage < pagination.totalPages &&
+			!isLoadingMore
+		) {
+			loadNotifications(pagination.currentPage + 1);
+		}
+	};
+
+	if (isLoading && notificationsFromStore.length === 0) {
+		return (
+			<View style={styles.centered}>
+				<ActivityIndicator size="large" color={colors.primary} />
+				<Text style={styles.messageText}>Loading notifications...</Text>
+			</View>
+		);
+	}
+
+	if (error && notificationsFromStore.length === 0) {
+		return (
+			<View style={styles.centered}>
+				<Text style={styles.errorText}>Error: {error}</Text>
+				<PrimaryButton
+					title="Retry"
+					onPress={() => loadNotifications(1)}
+				/>
+			</View>
+		);
+	}
+
+	if (groupedDisplayNotifications.length === 0 && !isLoading) {
+		return (
+			<View style={styles.centered}>
+				<Text style={styles.noNotificationsText}>
+					You have no notifications yet.
+				</Text>
+			</View>
+		);
+	}
+
+	return (
+		<SectionList
+			sections={groupedDisplayNotifications}
+			keyExtractor={(item, index) => item.id + index}
+			renderItem={renderNotificationDisplayItem}
+			renderSectionHeader={renderSectionHeader}
+			style={styles.screenContainer}
+			contentContainerStyle={styles.listContentContainer}
+			stickySectionHeadersEnabled={false}
+			showsVerticalScrollIndicator={false}
+			refreshControl={
+				<RefreshControl
+					refreshing={
+						isLoading && notificationsFromStore.length === 0
+					}
+					onRefresh={onRefresh}
+					colors={[colors.primary]}
+					tintColor={colors.primary}
+				/>
+			}
+			onEndReached={onEndReached}
+			onEndReachedThreshold={0.5}
+			ListFooterComponent={
+				isLoadingMore ? (
+					<ActivityIndicator
+						style={{ marginVertical: spacing.m }}
+						color={colors.primary}
+					/>
+				) : null
+			}
+		/>
+	);
 };
 
 const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight || '#F7F9FC', // Off-white background
-  },
-  listContentContainer: {
-    paddingBottom: spacing.l,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.l,
-  },
-  markAllReadLink: {
-    color: colors.primary,
-    fontSize: typography.fontSizes.s,
-    fontWeight: typography.fontWeights.medium,
-  },
-  sectionHeader: {
-    fontSize: typography.fontSizes.s,
-    fontWeight: typography.fontWeights.semiBold,
-    color: colors.textSecondary,
-    backgroundColor: colors.backgroundLight || '#F7F9FC', // Match screen background
-    paddingVertical: spacing.s,
-    paddingHorizontal: spacing.m,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  // Styles for NotificationItem (merged here for single file example)
-  notificationItemContainer: {
-    flexDirection: 'row',
-    paddingVertical: spacing.m,
-    paddingHorizontal: spacing.m,
-    backgroundColor: colors.white, // Clean notification background
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderDefault || '#EEE',
-  },
-  unreadNotification: {
-    backgroundColor: '#F0FFF0', // Very subtle green tint for unread
-    // borderLeftWidth: 3, // Example: different indicator for unread
-    // borderLeftColor: colors.primary,
-  },
-  iconWrapper: {
-    marginRight: spacing.m,
-    alignItems: 'center',
-    // justifyContent: 'center', // Center icon vertically with first line of text
-    paddingTop: spacing.xxs,
-  },
-  notificationIcon: {
-    fontSize: 22, // Adjusted size
-    color: colors.primary,
-  },
-  notificationContent: {
-    flex: 1,
-  },
-  notificationTitle: {
-    fontSize: typography.fontSizes.m,
-    fontWeight: typography.fontWeights.bold,
-    color: colors.textPrimary,
-    marginBottom: spacing.xxs,
-  },
-  notificationSubtitle: {
-    fontSize: typography.fontSizes.s,
-    color: colors.textSecondary,
-    lineHeight: typography.fontSizes.s * 1.4,
-    marginBottom: spacing.xs,
-  },
-  notificationFooter: { // Renamed from footer to avoid conflict
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  timestamp: {
-    fontSize: typography.fontSizes.xs,
-    color: "#F0F0F0",
-  },
-  detailsLink: {
-    fontSize: typography.fontSizes.s,
-    color: colors.primary,
-    fontWeight: typography.fontWeights.semiBold,
-  },
+	screenContainer: {
+		flex: 1,
+		backgroundColor: colors.backgroundLight || "#F7F9FC",
+	},
+	listContentContainer: { paddingBottom: spacing.l },
+	centered: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		padding: spacing.l,
+	},
+	messageText: { marginTop: spacing.s, color: colors.textMedium },
+	errorText: {
+		color: colors.error,
+		fontSize: typography.fontSizes.m,
+		textAlign: "center",
+		marginBottom: spacing.m,
+	},
+	noNotificationsText: {
+		fontSize: typography.fontSizes.l,
+		color: colors.textMedium,
+	},
+	markAllReadLink: {
+		color: colors.primary,
+		fontSize: typography.fontSizes.s,
+		fontWeight: typography.fontWeights.medium,
+	},
+	sectionHeader: {
+		fontSize: typography.fontSizes.s,
+		fontWeight: typography.fontWeights.semiBold,
+		color: colors.textSecondary,
+		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		paddingVertical: spacing.s,
+		paddingHorizontal: spacing.m,
+		textTransform: "uppercase",
+		letterSpacing: 0.5,
+	},
+	// NotificationItem Styles
+	notificationItemContainer: {
+		flexDirection: "row",
+		paddingVertical: spacing.m,
+		paddingHorizontal: spacing.m,
+		backgroundColor: colors.white,
+		borderBottomWidth: StyleSheet.hairlineWidth,
+		borderBottomColor: colors.borderDefault || "#EEE",
+	},
+	unreadNotification: {
+		backgroundColor: colors.primaryVeryLight || "#E6FFFA",
+		borderLeftWidth: 3,
+		borderLeftColor: colors.primary,
+	},
+	iconWrapper: {
+		marginRight: spacing.m,
+		alignItems: "center",
+		paddingTop: spacing.xxs,
+	},
+	notificationIcon: { fontSize: 22, color: colors.primary },
+	notificationContent: { flex: 1 },
+	notificationTitle: {
+		fontSize: typography.fontSizes.m,
+		fontWeight: typography.fontWeights.bold,
+		color: colors.textPrimary,
+		marginBottom: spacing.xxs,
+	},
+	notificationSubtitle: {
+		fontSize: typography.fontSizes.s,
+		color: colors.textSecondary,
+		lineHeight: typography.fontSizes.s * 1.4,
+		marginBottom: spacing.xs,
+	},
+	notificationFooter: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+		marginTop: spacing.xs,
+	},
+	timestamp: { fontSize: typography.fontSizes.xs, color: colors.textLight },
+	detailsLink: {
+		fontSize: typography.fontSizes.s,
+		color: colors.primary,
+		fontWeight: typography.fontWeights.semiBold,
+	},
 });
 
 export default NotificationsScreen;

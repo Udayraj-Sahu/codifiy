@@ -7,11 +7,11 @@ import {
 	createStackNavigator,
 	StackNavigationOptions,
 } from "@react-navigation/stack";
-import React ,{useMemo} from "react";
-import { Text } from "react-native"; // For placeholder icons
-
+import React from "react";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import HomeScreen from "../screens/App/Home/HomeScreen"; // NEW
 import MyRentalsScreen from "../screens/App/Rental/MyRentalsScreen";
+import { TabBarIconProps } from "./types";
 // Import your screen components (ensure paths match your project structure)
 import ApplyPromoCodeScreen from "../screens/App/Booking/ApplyPromoCodeScreen";
 import BookingConfirmationScreen from "../screens/App/Booking/BookingConfirmationScreen";
@@ -20,14 +20,14 @@ import BikeDetailsScreen from "../screens/App/Explore/BikeDetailsScreen";
 import ExploreScreen from "../screens/App/Explore/ExploreScreen";
 import FilterScreen from "../screens/App/Explore/FilterScreen";
 // Ensure these paths are correct for your project:
+import ScreenHeader from "../components/common/ScreenHeader"; // Using your specified path
 import DocumentUploadScreen from "../screens/App/Documents/DocumentUploadScreen";
 import NotificationsScreen from "../screens/App/Home/NotificationsScreen";
 import EditProfileScreen from "../screens/App/Profile/EditProfileScreen";
 import ProfileScreen from "../screens/App/Profile/ProfileScreen";
 import SettingsScreen from "../screens/App/Profile/SettingScreen"; // Corrected to SettingsScreen
+import AddMoneyScreen from "../screens/App/Wallet/AddMoneyScreen";
 import WalletPaymentsScreen from "../screens/App/Wallet/WalletPaymentScreen";
-
-import ScreenHeader from "../components/common/ScreenHeader"; // Using your specified path
 import { colors, typography } from "../theme"; // Using your specified path
 
 import {
@@ -58,27 +58,45 @@ const customStackScreenOptions: (navigation: any) => StackNavigationOptions = (
 });
 
 // --- Placeholder Tab Bar Icon Component ---
-const TabBarIcon: React.FC<{
-	name: keyof UserTabParamList;
-	focused: boolean;
-	color: string;
-	size: number;
-}> = ({ name, focused, color, size }) => {
-	let iconName = name.substring(0, 1);
-	if (name === "HomeTab") iconName = focused ? "🏠" : "🏡"; // NEW
-	else if (name === "ExploreTab") iconName = focused ? "🗺️" : "🌍";
-	else if (name === "WalletTab") iconName = focused ? "💳" : "💰"; // NEW
-	else if (name === "ProfileTab") iconName = focused ? "👤" : "🧍";
-	return (
-		<Text
-			style={{
-				color,
-				fontSize: size,
-				fontWeight: focused ? "bold" : "normal",
-			}}>
-			{iconName}
-		</Text>
-	);
+const TabBarIcon: React.FC<TabBarIconProps> = ({
+	name,
+	focused,
+	color,
+	size,
+}) => {
+	let iconNameToRender: string; // Renamed to avoid confusion with the 'name' prop
+
+	if (name === "HomeTab") {
+		iconNameToRender = focused ? "home" : "dashboard";
+		size = 30; // Material Community Icons has home-outline
+		// For standard MaterialIcons, 'home' is usually sufficient, color indicates focus.
+		// Or, just use 'home' and let 'color' prop handle the visual difference.
+		// iconNameToRender = "home";
+	} else if (name === "ExploreTab") {
+		iconNameToRender = focused ? "explore" : "explore-off";
+		size = 30; // Or "search", "map"
+		// iconNameToRender = "explore";
+	} else if (name === "WalletTab") {
+		iconNameToRender = focused ? "payments" : "payment";
+		size = 30; // Material Community Icons
+		// For standard MaterialIcons:
+		// iconNameToRender = "account-balance-wallet";
+	} else if (name === "ProfileTab") {
+		iconNameToRender = focused ? "person" : "person-outline";
+		size = 30;
+		// Or "account-circle" / "account-circle-outline"
+		// iconNameToRender = "account-circle";
+	} else {
+		// Fallback icon in case a name doesn't match
+		iconNameToRender = "help-outline";
+	}
+
+	// The 'fontWeight' style is not directly applicable to MaterialIcons component.
+	// The 'focused' state is primarily handled by the 'color' prop provided
+	// by React Navigation (activeTintColor/inactiveTintColor) and potentially
+	// by choosing different icon variants (e.g., filled vs. outline) as shown above.
+
+	return <MaterialIcons name={iconNameToRender} size={size} color={color} />;
 };
 
 const HomeStack = createStackNavigator<HomeStackParamList>();
@@ -153,6 +171,11 @@ const WalletStackNavigator: React.FC = () => (
 			name="WalletPaymentsScreen"
 			component={WalletPaymentsScreen}
 			options={{ title: "Wallet & Payments" }}
+		/>
+		<WalletStack.Screen // <<< ADD THIS SCREEN DEFINITION
+			name="AddMoneyScreen"
+			component={AddMoneyScreen}
+			options={{ title: "Add Money to Wallet" }}
 		/>
 		{/* Example future screens in this stack:
     <WalletStack.Screen name="AddMoneyScreen" component={AddMoneyScreen} options={{ title: 'Add Money' }} />

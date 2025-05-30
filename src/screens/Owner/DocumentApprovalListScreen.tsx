@@ -6,7 +6,7 @@ import React, {
 	useEffect,
 	useLayoutEffect,
 	useState,
-} from "react"; // Correct React import
+} from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -18,129 +18,42 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
+import { useDispatch, useSelector } from "react-redux"; // <<< ADDED
 import {
 	DocumentStatusOwner,
 	OwnerStackParamList,
-} from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "../../navigation/types";
+import {
+	fetchDocumentsForReviewThunk, // Use the Document type from your slice
+	FetchDocumentsParamsAdminOwner,
+	updateDocumentStatusThunk,
+} from "../../store/slices/documentSlice"; // <<< ADDED
+import { AppDispatch, RootState } from "../../store/store"; // <<< ADDED
+import { borderRadius, colors, spacing, typography } from "../../theme";
 
-// --- Types and Dummy Data ---
-interface DocumentForApproval {
-	id: string;
+// --- Types ---
+// DocumentForApproval can now be mapped from StoreDocument
+interface DocumentForApprovalItem {
+	// Renamed to avoid conflict if needed
+	id: string; // maps to _id
 	userId: string;
 	userName: string;
 	userEmail: string;
-	documentType: "Driving License" | "ID Proof" | "Passport";
-	docIconPlaceholder: string;
+	documentType: string; // Was more specific before, now from StoreDocument
+	docIconPlaceholder: string; // You might need to derive this based on documentType
 	submittedDate: string;
 	status: Exclude<DocumentStatusOwner, "all">;
-	documentImageUrl?: string;
+	documentImageUrl?: string; // For navigation to viewer
 }
 
-const DUMMY_DOCUMENTS_FOR_APPROVAL: DocumentForApproval[] = [
-	{
-		id: "doc_u2_dl",
-		userId: "u2",
-		userName: "Michael Chen",
-		userEmail: "michael.c@example.com",
-		documentType: "Driving License",
-		docIconPlaceholder: "💳",
-		submittedDate: "Today, 11:45 AM",
-		status: "pending",
-		documentImageUrl:
-			"https://via.placeholder.com/600x400.png?text=Chen+DL",
-	},
-	{
-		id: "doc_u5_id",
-		userId: "u5",
-		userName: "Olivia Brown",
-		userEmail: "olivia.b@example.com",
-		documentType: "ID Proof",
-		docIconPlaceholder: "📄",
-		submittedDate: "This Week, Tue 1:00 PM",
-		status: "pending",
-		documentImageUrl:
-			"https://via.placeholder.com/600x400.png?text=Brown+ID",
-	},
-	{
-		id: "doc_u1_dl",
-		userId: "u1",
-		userName: "Sarah Johnson",
-		userEmail: "sarah.j@example.com",
-		documentType: "Driving License",
-		docIconPlaceholder: "💳",
-		submittedDate: "Today, 2:30 PM",
-		status: "approved",
-		documentImageUrl:
-			"https://via.placeholder.com/600x400.png?text=Johnson+DL",
-	},
-	{
-		id: "doc_u3_pp",
-		userId: "u3",
-		userName: "Emma Wilson",
-		userEmail: "emma.w@example.com",
-		documentType: "Passport",
-		docIconPlaceholder: "🛂",
-		submittedDate: "Yesterday, 4:15 PM",
-		status: "rejected",
-		documentImageUrl:
-			"https://via.placeholder.com/600x400.png?text=Wilson+Passport",
-	},
-];
+// --- DUMMY DATA REMOVED ---
+// const DUMMY_DOCUMENTS_FOR_APPROVAL: DocumentForApproval[] = [ ... ];
+// const fetchDocumentsForApprovalAPI = async ( ... ): Promise<DocumentForApproval[]> => { ... };
+// const updateDocumentStatusAPI_Owner = async ( ... ): Promise<{ success: boolean }> => { ... };
 
-const fetchDocumentsForApprovalAPI = async (filters: {
-	status: DocumentStatusOwner;
-	searchQuery?: string;
-}): Promise<DocumentForApproval[]> => {
-	console.log("Fetching documents for owner with filters:", filters);
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			let docs = DUMMY_DOCUMENTS_FOR_APPROVAL;
-			if (filters.status !== "all") {
-				docs = docs.filter((d) => d.status === filters.status);
-			}
-			if (filters.searchQuery && filters.searchQuery.trim() !== "") {
-				const sq = filters.searchQuery.toLowerCase();
-				docs = docs.filter(
-					(d) =>
-						d.userName.toLowerCase().includes(sq) ||
-						d.userEmail.toLowerCase().includes(sq)
-				);
-			}
-			resolve([...docs]);
-		}, 300);
-	});
-};
-
-const updateDocumentStatusAPI_Owner = async (
-	documentId: string,
-	newStatus: "approved" | "rejected",
-	reason?: string
-): Promise<{ success: boolean }> => {
-	console.log(
-		`OWNER: Updating document ${documentId} to ${newStatus}. Reason: ${
-			reason || "N/A"
-		}`
-	);
-	const docIndex = DUMMY_DOCUMENTS_FOR_APPROVAL.findIndex(
-		(d) => d.id === documentId
-	);
-	if (docIndex > -1) {
-		DUMMY_DOCUMENTS_FOR_APPROVAL[docIndex].status = newStatus; // Mutating dummy data for simulation
-		return new Promise((resolve) =>
-			setTimeout(() => resolve({ success: true }), 500)
-		);
-	}
-	return new Promise((resolve) =>
-		setTimeout(() => resolve({ success: false }), 500)
-	);
-};
-// --- End Dummy Data ---
-
-// --- Reusable Components (Inline) ---
+// --- Reusable Components (FilterPillButton, OwnerDocumentCard - ensure props match DocumentForApprovalItem) ---
 interface FilterPillButtonProps {
-	label: string;
+	/* ... */ label: string;
 	isActive: boolean;
 	onPress: () => void;
 }
@@ -164,7 +77,7 @@ const FilterPillButton: React.FC<FilterPillButtonProps> = ({
 );
 
 interface OwnerDocumentCardProps {
-	item: DocumentForApproval;
+	item: DocumentForApprovalItem; // Use the mapped type
 	onView: () => void;
 	onApprove: () => void;
 	onReject: () => void;
@@ -175,7 +88,12 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 	onApprove,
 	onReject,
 }) => {
-	const statusStyles = {
+	// ... (Card JSX remains similar, ensure it uses fields from DocumentForApprovalItem) ...
+	// For status styles, make sure item.status matches the keys in statusStyles
+	const statusStyles: Record<
+		Exclude<DocumentStatusOwner, "all">,
+		{ badge: object; text: object }
+	> = {
 		approved: {
 			badge: styles.statusBadgeApproved,
 			text: styles.statusTextApproved,
@@ -287,30 +205,49 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 	route,
 	navigation,
 }) => {
+	const dispatch = useDispatch<AppDispatch>();
+	const {
+		reviewDocuments, // This will hold the documents fetched for review
+		isLoadingReviewDocs: isLoading, // Use this for loading state
+		pagination,
+		errorReviewDocs: error,
+	} = useSelector((state: RootState) => state.documents);
+
 	const initialFilterFromRoute = route.params?.filter || "pending";
-	const [documents, setDocuments] = useState<DocumentForApproval[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
 	const [activeStatusFilter, setActiveStatusFilter] =
 		useState<DocumentStatusOwner>(initialFilterFromRoute);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [showSearchInput, setShowSearchInput] = useState(false);
+	const [currentPage, setCurrentPage] = useState(1);
 
 	const loadDocuments = useCallback(
-		async (status: DocumentStatusOwner, query: string) => {
-			setIsLoading(true);
-			const fetchedDocs = await fetchDocumentsForApprovalAPI({
-				status,
-				searchQuery: query,
-			});
-			setDocuments(fetchedDocs);
-			setIsLoading(false);
+		(page = 1) => {
+			const params: FetchDocumentsParamsAdminOwner = {
+				status:
+					activeStatusFilter === "all"
+						? undefined
+						: activeStatusFilter,
+				search: searchQuery.trim() || undefined,
+				page,
+				limit: 10, // Or your desired limit
+			};
+			dispatch(fetchDocumentsForReviewThunk(params));
 		},
-		[]
+		[dispatch, activeStatusFilter, searchQuery]
 	);
 
 	useEffect(() => {
-		loadDocuments(activeStatusFilter, searchQuery);
-	}, [activeStatusFilter, searchQuery, loadDocuments]);
+		setCurrentPage(1); // Reset to first page on filter change
+		loadDocuments(1);
+	}, [activeStatusFilter, searchQuery, loadDocuments]); // loadDocuments dependency can be removed if params are directly used
+
+	const handleLoadMore = () => {
+		if (pagination && currentPage < pagination.totalPages && !isLoading) {
+			const nextPage = currentPage + 1;
+			setCurrentPage(nextPage);
+			loadDocuments(nextPage);
+		}
+	};
 
 	useLayoutEffect(() => {
 		const title = `${
@@ -333,10 +270,10 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 	}, [navigation, activeStatusFilter, showSearchInput]);
 
 	const handleViewDocument = useCallback(
-		(item: DocumentForApproval) => {
+		(item: DocumentForApprovalItem) => {
 			navigation.navigate("OwnerDocumentViewerScreen", {
-				documentId: item.id,
-				documentImageUrl: item.documentImageUrl,
+				documentId: item.id, // Pass the actual document ID (_id from MongoDB)
+				documentImageUrl: item.documentImageUrl, // This might be item.fileUrl from StoreDocument
 				userName: item.userName,
 				documentType: item.documentType,
 				status: item.status,
@@ -347,12 +284,31 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 
 	const handleUpdateStatus = useCallback(
 		async (docId: string, newStatus: "approved" | "rejected") => {
-			const confirmMessage = `Are you sure you want to ${newStatus} this document?`;
+			let reasonInput = "";
+			if (newStatus === "rejected") {
+				// Simple prompt for reason, replace with a proper input modal in a real app
+				const reason = await new Promise<string | undefined>(
+					(resolve) => {
+						Alert.prompt(
+							"Rejection Reason",
+							"Please provide a reason for rejection (optional):",
+							(text) => resolve(text),
+							"plain-text"
+						);
+					}
+				);
+				reasonInput = reason || "";
+			}
+
 			Alert.alert(
 				`Confirm ${
 					newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
 				}`,
-				confirmMessage,
+				`Are you sure you want to ${newStatus} this document? ${
+					newStatus === "rejected" && reasonInput
+						? "\nReason: " + reasonInput
+						: ""
+				}`,
 				[
 					{ text: "Cancel", style: "cancel" },
 					{
@@ -364,33 +320,71 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 								? "destructive"
 								: "default",
 						onPress: async () => {
-							setIsLoading(true);
-							const result = await updateDocumentStatusAPI_Owner(
-								docId,
-								newStatus
-							);
-							if (result.success) {
+							try {
+								await dispatch(
+									updateDocumentStatusThunk({
+										docId,
+										status: newStatus,
+										reviewComments: reasonInput,
+									})
+								).unwrap();
 								Alert.alert(
 									"Success",
 									`Document status updated to ${newStatus}.`
 								);
-								loadDocuments(activeStatusFilter, searchQuery); // Refresh list
-							} else {
+								// The list will refresh because updateDocumentStatusThunk dispatches fetchDocumentsForReviewThunk
+								// Or you can explicitly call loadDocuments(1) here if that's preferred.
+								setCurrentPage(1); // Go back to first page after status update
+							} catch (updateError: any) {
 								Alert.alert(
 									"Error",
-									`Failed to update document status.`
+									updateError ||
+										`Failed to update document status.`
 								);
-								setIsLoading(false); // Only set loading false on error if not refreshing
 							}
 						},
 					},
 				]
 			);
 		},
-		[loadDocuments, activeStatusFilter, searchQuery]
-	); // Added dependencies
+		[dispatch, activeStatusFilter, searchQuery]
+	); // Removed loadDocuments from deps as thunk handles refresh
 
-	const renderDocumentItem = ({ item }: { item: DocumentForApproval }) => (
+	// Map StoreDocument from Redux to DocumentForApprovalItem for the card
+	const mappedDocuments: DocumentForApprovalItem[] = reviewDocuments.map(
+		(doc) => ({
+			id: doc._id,
+			userId: typeof doc.user === "string" ? doc.user : doc.user._id, // Handle populated vs. non-populated user
+			userName:
+				typeof doc.user === "string"
+					? "N/A"
+					: doc.user.fullName || "N/A",
+			userEmail:
+				typeof doc.user === "string" ? "N/A" : doc.user.email || "N/A",
+			documentType: doc.documentType
+				.replace("_", " ")
+				.split(" ")
+				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+				.join(" "),
+			docIconPlaceholder:
+				doc.documentType === "drivers_license"
+					? "💳"
+					: doc.documentType === "id_card"
+					? "📄"
+					: "🛂",
+			submittedDate: new Date(
+				doc.uploadedAt || doc.createdAt
+			).toLocaleDateString(),
+			status: doc.status as Exclude<DocumentStatusOwner, "all">,
+			documentImageUrl: doc.fileUrl,
+		})
+	);
+
+	const renderDocumentItem = ({
+		item,
+	}: {
+		item: DocumentForApprovalItem;
+	}) => (
 		<OwnerDocumentCard
 			item={item}
 			onView={() => handleViewDocument(item)}
@@ -406,7 +400,7 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 		"all",
 	];
 
-	if (isLoading && documents.length === 0) {
+	if (isLoading && mappedDocuments.length === 0 && currentPage === 1) {
 		return (
 			<View style={styles.centered}>
 				<ActivityIndicator size="large" color={colors.primary} />
@@ -425,7 +419,10 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 						style={styles.searchInput}
 						placeholder="Search by user name or email..."
 						value={searchQuery}
-						onChangeText={setSearchQuery}
+						onChangeText={(text) => {
+							setSearchQuery(text);
+							setCurrentPage(1); /* Trigger fetch in useEffect */
+						}}
 						placeholderTextColor={colors.textPlaceholder}
 						autoFocus
 					/>
@@ -444,13 +441,24 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 								tabStatus.slice(1)
 							}
 							isActive={activeStatusFilter === tabStatus}
-							onPress={() => setActiveStatusFilter(tabStatus)}
+							onPress={() => {
+								setActiveStatusFilter(tabStatus);
+								setCurrentPage(
+									1
+								); /* Trigger fetch in useEffect */
+							}}
 						/>
 					))}
 				</ScrollView>
 			</View>
 
-			{documents.length === 0 && !isLoading ? (
+			{error && (
+				<View style={styles.centered}>
+					<Text style={styles.errorText}>{error}</Text>
+				</View>
+			)}
+
+			{!isLoading && mappedDocuments.length === 0 && !error ? (
 				<View style={styles.centered}>
 					<Text style={styles.noResultsText}>
 						No documents found for "{activeStatusFilter}" status.
@@ -458,14 +466,26 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 				</View>
 			) : (
 				<FlatList
-					data={documents}
+					data={mappedDocuments}
 					renderItem={renderDocumentItem}
 					keyExtractor={(item) => item.id}
 					contentContainerStyle={styles.listContentContainer}
 					showsVerticalScrollIndicator={false}
-					refreshing={isLoading}
-					onRefresh={() =>
-						loadDocuments(activeStatusFilter, searchQuery)
+					onRefresh={() => {
+						setCurrentPage(1);
+						loadDocuments(1);
+					}}
+					refreshing={isLoading && currentPage === 1}
+					onEndReached={handleLoadMore}
+					onEndReachedThreshold={0.5}
+					ListFooterComponent={
+						isLoading && currentPage > 1 ? (
+							<ActivityIndicator
+								size="small"
+								color={colors.primary}
+								style={{ marginVertical: spacing.m }}
+							/>
+						) : null
 					}
 				/>
 			)}
@@ -473,7 +493,7 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 	);
 };
 
-// --- Styles (ensure these are complete and correct as per previous definition) ---
+// Styles (ensure these are defined as per your project)
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
@@ -484,6 +504,11 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.l,
+	},
+	errorText: {
+		color: colors.error,
+		fontSize: typography.fontSizes.m,
+		textAlign: "center",
 	},
 	searchBarContainer: {
 		paddingHorizontal: spacing.m,

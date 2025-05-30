@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import PrimaryButton from './PrimaryButton'; // Assuming PrimaryButton is in the same folder or accessible path
 // Import icons (e.g., from react-native-vector-icons or an SVG library)
-// import Icon from 'react-native-vector-icons/MaterialIcons'; // Example
+import Icon from 'react-native-vector-icons/MaterialIcons'; // Example
 
 // Placeholder for actual theme constants
 const Colors = {

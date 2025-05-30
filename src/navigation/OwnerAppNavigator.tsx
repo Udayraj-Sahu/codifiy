@@ -7,12 +7,12 @@ import React from "react";
 import { Platform } from "react-native"; // For platform-specific styling if needed
 
 // Import Owner Screens (create these files in src/screens/Owner/ if they don't exist)
-import OwnerDashboardScreen from "../screens/Owner/OwnerDashboardScreen";
-// import RoleManagementScreen from '../screens/Owner/RoleManagementScreen';
 import DocumentApprovalListScreen from "../screens/Owner/DocumentApprovalListScreen"; // Placeholder
 import OwnerBookingDetailsScreen from "../screens/Owner/OwnerBookingDetailsScreen";
+import OwnerDashboardScreen from "../screens/Owner/OwnerDashboardScreen";
 import OwnerDocumentViewerScreen from "../screens/Owner/OwnerDocumentViewerScreen"; // Placeholder
 import OwnerManageBookingsScreen from "../screens/Owner/OwnerManageBookingScreen";
+import RoleManagementScreen from "../screens/Owner/RoleManagementScreen";
 // import AppStatisticsScreen from '../screens/Owner/AppStatisticsScreen'; // Placeholder
 // For Profile and Settings, you might reuse existing user screens or create owner-specific ones
 // import OwnerNotificationsScreen from '../screens/Owner/OwnerNotificationsScreen'; // Placeholder
@@ -70,14 +70,12 @@ const OwnerAppNavigator: React.FC = () => {
 				component={OwnerDocumentViewerScreen}
 				// options={{ title: 'View Document' }} // Title can be set dynamically
 			/>
-			{/* 
-      <Stack.Screen
-        name="RoleManagementScreen"
-        component={RoleManagementScreen} // Create this placeholder screen
-        options={{ title: 'Manage User Roles' }}
-      />
-    
-       */}
+
+			<Stack.Screen
+				name="RoleManagementScreen"
+				component={RoleManagementScreen} // Create this placeholder screen
+				options={{ title: "Manage User Roles" }}
+			/>
 
 			{/* Example for a modal filter screen, if needed for OwnerBookings or DocumentApprovalList
       <Stack.Screen
