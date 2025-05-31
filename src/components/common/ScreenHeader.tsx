@@ -1,91 +1,57 @@
-// components/ScreenHeader.tsx (Conceptual - Corrected SafeAreaView)
+// components/common/ScreenHeader.tsx
 import React from "react";
 import {
-	StyleProp,
+	Platform,
+	SafeAreaView,
 	StyleSheet,
 	Text,
-	TextStyle,
 	TouchableOpacity,
 	View,
-	ViewStyle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // CORRECTED IMPORT
-// For icons, you'd typically use a library like react-native-vector-icons
-// import Icon from 'react-native-vector-icons/Ionicons'; // Example
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 
-// --- Theme constants (Colors, Fonts, Spacing) ---
-// (Assuming these are defined as discussed previously)
-const Colors = {
-	headerBackground: "#FFFFFF",
-	textHeader: "#1A1A1A",
-	iconDefault: "#4A4A4A",
-	borderLight: "#EAEAEA",
-};
-const Fonts = {
-	size: { large: 18 },
-	weight: { semiBold: "600" as "600" },
-};
-const Spacing = { small: 8, medium: 12 };
-// --- End Theme constants ---
+// Import your theme variables
+import { colors, spacing, typography } from "../../theme"; // Adjust path as necessary
 
 interface ScreenHeaderProps {
 	title: string;
-	onPressBack?: () => void;
 	showBackButton?: boolean;
-	rightActionComponent?: React.ReactNode;
-	style?: StyleProp<ViewStyle>;
-	titleStyle?: StyleProp<TextStyle>;
-	backButtonIcon?: React.ReactNode;
-	headerLeft?: () => React.ReactNode; // Allow custom left component
-	headerRight?: () => React.ReactNode;
-	statusBarColor?: string; // This would color the background behind status bar if SafeAreaView allows
-	barStyle?: "default" | "light-content" | "dark-content";
+	onPressBack?: () => void;
+	rightActions?: React.ReactNode; // Optional prop for icons/buttons on the right
 }
 
 const ScreenHeader: React.FC<ScreenHeaderProps> = ({
 	title,
+	showBackButton,
 	onPressBack,
-	showBackButton: explicitShowBackButton,
-	rightActionComponent,
-	style,
-	titleStyle,
-	headerLeft,
-	headerRight,
-	backButtonIcon,
-	statusBarColor = Colors.headerBackground, // Default from theme
-	// barStyle = 'dark-content', // For StatusBar component
+	rightActions,
 }) => {
-	const actualShowBackButton =
-		explicitShowBackButton !== undefined
-			? explicitShowBackButton
-			: !!onPressBack;
-	const defaultBackIcon = (
-		<Text style={{ fontSize: 24, color: Colors.iconDefault }}>‹</Text>
-	);
-
 	return (
-		<SafeAreaView
-			style={[{ backgroundColor: statusBarColor }, styles.safeArea]} // Apply BG color for notch area
-			edges={["top"]} // NOW VALID with react-native-safe-area-context
-		>
-			<View style={[styles.headerContainer, style]}>
+		<SafeAreaView style={styles.safeArea}>
+			<View style={styles.container}>
 				<View style={styles.leftComponent}>
-					{actualShowBackButton && (
+					{showBackButton && (
 						<TouchableOpacity
 							onPress={onPressBack}
-							style={styles.touchableArea}>
-							{backButtonIcon || defaultBackIcon}
+							style={styles.buttonStyle}>
+							<MaterialIcons
+								name={
+									Platform.OS === "ios"
+										? "arrow-back-ios"
+										: "arrow-back"
+								}
+								size={24}
+								color={colors.iconWhite || colors.textPrimary} // Use themed icon color
+							/>
 						</TouchableOpacity>
 					)}
 				</View>
 				<View style={styles.titleContainer}>
-					<Text style={[styles.title, titleStyle]} numberOfLines={1}>
+					<Text style={styles.titleText} numberOfLines={1}>
 						{title}
 					</Text>
 				</View>
-				<View style={styles.rightComponent}>
-					{rightActionComponent}
-				</View>
+				<View style={styles.rightComponent}>{rightActions}</View>
 			</View>
 		</SafeAreaView>
 	);
@@ -93,36 +59,41 @@ const ScreenHeader: React.FC<ScreenHeaderProps> = ({
 
 const styles = StyleSheet.create({
 	safeArea: {
-		// No specific background needed here if the inner view has it,
-		// unless you want the notch area itself to have a different color than content bg
+		backgroundColor: colors.backgroundHeader, // THEMED: Header background color
 	},
-	headerContainer: {
+	container: {
 		flexDirection: "row",
 		alignItems: "center",
-		justifyContent: "space-between",
-		height: 56,
-		paddingHorizontal: Spacing.small,
-		backgroundColor: Colors.headerBackground, // Main header background
-		borderBottomWidth: 1,
-		borderBottomColor: Colors.borderLight,
+		height: Platform.OS === "ios" ? 44 : 56, // Standard header heights
+		paddingHorizontal: spacing.s, // Use theme spacing
+		// backgroundColor is handled by SafeAreaView
+		// borderBottomWidth: StyleSheet.hairlineWidth, // Optional: if you want a border
+		// borderBottomColor: colors.borderDefault,    // THEMED: Border color
 	},
 	leftComponent: {
-		flex: 1,
-		justifyContent: "flex-start",
-		alignItems: "center",
+		width: 50, // Fixed width for the left component (back button)
+		alignItems: "flex-start",
+		justifyContent: "center",
 	},
-	titleContainer: { flex: 3, justifyContent: "center", alignItems: "center" },
-	title: {
-		fontSize: Fonts.size.large,
-		fontWeight: Fonts.weight.semiBold,
-		color: Colors.textHeader,
+	buttonStyle: {
+		padding: spacing.s, // Use theme spacing for touchable area
+	},
+	titleContainer: {
+		flex: 1, // Allows title to take remaining space and be centered
+		alignItems: "center", // Center title horizontally
+		justifyContent: "center",
+	},
+	titleText: {
+		fontSize: typography.fontSizes.l, // Use theme typography
+		fontFamily: typography.primarySemiBold, // Use theme typography
+		color: colors.textPrimary, // THEMED: Header title color
+		textAlign: "center",
 	},
 	rightComponent: {
-		flex: 1,
-		justifyContent: "flex-end",
+		width: 50, // Fixed width for right actions, ensures title stays centered
 		alignItems: "flex-end",
+		justifyContent: "center",
 	},
-	touchableArea: { padding: Spacing.small },
 });
 
 export default ScreenHeader;

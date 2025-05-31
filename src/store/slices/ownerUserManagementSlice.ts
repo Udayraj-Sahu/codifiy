@@ -54,26 +54,51 @@ export const fetchUsersForOwnerThunk = createAsyncThunk<
 });
 
 export const updateUserRoleByOwnerThunk = createAsyncThunk<
-	User, // Returns the updated user object
-	{ userId: string; newRole: "User" | "Owner" | "Admin" },
-	{ rejectValue: string; state: RootState }
+    User, // Return type on success (updated user object)
+    { userId: string; newRole: 'User' | 'Owner' | 'Admin' /*; token: string | null*/ },
+    { rejectValue: string } // IMPORTANT: Ensures rejectWithValue payload is a string
 >(
-	"ownerUserManagement/updateUserRole",
-	async ({ userId, newRole }, thunkAPI) => {
-		const token = thunkAPI.getState().auth.token;
-		try {
-			const response = await ownerUserService.updateUserRoleByOwnerAPI(
-				userId,
-				newRole,
-				token
-			);
-			return response.data; // The service returns { success, data: updatedUser }, so we take data
-		} catch (error: any) {
-			return thunkAPI.rejectWithValue(
-				error.message || "Failed to update user role"
-			);
-		}
-	}
+    'ownerUserManagement/updateRole', // Your thunk's type prefix
+    async ({ userId, newRole /*, token */ }, thunkAPI) => {
+        try {
+            // const responseData = await updateUserRoleByOwnerAPI(userId, newRole, token); // Your actual API service call
+            // return responseData.data; // Assuming your API service returns { success: true, data: ... }
+
+            // For this example, simulating an API call that might return different error structures
+            // THIS IS WHERE YOUR ACTUAL CALL TO THE SERVICE FUNCTION IN ownerUserService.ts GOES
+            // e.g., const serviceResponse = await ownerUserService.updateUserRoleByOwnerAPI(userId, newRole, tokenFromState);
+            // return serviceResponse.data; // if serviceResponse is { success: true, data: updatedUser }
+
+
+            // --- Placeholder for actual API call that might throw an error ---
+            // To simulate, let's assume an error object 'errorFromApiCall' is thrown
+            // It might have properties like error.response.data
+            // For now, this thunk example won't actually make the call,
+            // it will just show how to handle errors from such a call.
+            // You need to integrate your actual API call here.
+            throw new Error("Simulated API error for demonstration in thunk.");
+            // --- End Placeholder ---
+
+        } catch (error: any) {
+            let extractedMessage = 'Failed to update role. Please try again.'; // Default message
+
+            if (error.response?.data?.errors && Array.isArray(error.response.data.errors) && error.response.data.errors.length > 0) {
+                // Handle express-validator errors (array of error objects)
+                extractedMessage = error.response.data.errors.map((err: any) => err.msg).join('\n');
+            } else if (error.response?.data?.message) {
+                // Handle errors like { message: "Some error string" } from backend
+                extractedMessage = error.response.data.message;
+            } else if (error.data?.message) {
+                 // Handle cases where the error object might have data.message (less common for API client errors, but good to check)
+                extractedMessage = error.data.message;
+            } else if (error.message) {
+                // Standard JavaScript error message property
+                extractedMessage = error.message;
+            }
+
+            return thunkAPI.rejectWithValue(extractedMessage); // Ensure this is a string
+        }
+    }
 );
 
 const ownerUserManagementSlice = createSlice({

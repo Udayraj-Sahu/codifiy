@@ -18,12 +18,13 @@ const adminBookingRoutes = require("./routes/adminBookingRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 // const adminBikeRoutes = require('./routes/adminBikeRoutes'); // Only if you have a separate file AND mount path for this
 const adminDashboardRoutes = require("./routes/adminDashboard");
-const ownerDashboardRoutes = require('./routes/ownerDashboardRoutes');
-const walletRoutes = require('./routes/walletRoutes'); 
+const ownerDashboardRoutes = require("./routes/ownerDashboardRoutes");
+const walletRoutes = require("./routes/walletRoutes");
+const ownerUserRoutes = require("./routes/ownerUserRoutes");
 connectDB();
 const app = express();
 
- // Adjust path if needed - THIS IS THE NEW LINE
+// Adjust path if needed - THIS IS THE NEW LINE
 
 // Core Middleware
 app.use(cors()); // Enable CORS for all routes
@@ -47,8 +48,9 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/promocodes", promoCodeRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
-app.use('/api/owner/dashboard', ownerDashboardRoutes); 
-app.use('/api/wallet', walletRoutes);
+app.use("/api/owner/dashboard", ownerDashboardRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/owner/users", ownerUserRoutes);
 // Admin specific routes (if you prefer a distinct prefix)
 // If adminBikeRoutes is a separate file for routes like POST /api/admin/bikes/
 // app.use('/api/admin/bikes', adminBikeRoutes); // Then uncomment and ensure it's defined

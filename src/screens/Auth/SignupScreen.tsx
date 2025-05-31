@@ -11,13 +11,18 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import PrimaryButton from "../../components/common/PrimaryButton";
-import StyledTextInput from "../../components/common/StyledTextInput"; // Adjust path
-import { useAuth } from "../../context/AuthContext"; // Adjust path
-import { AuthStackParamList } from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
+import PrimaryButton from "../../components/common/PrimaryButton"; // Assumed themed
+import StyledTextInput from "../../components/common/StyledTextInput"; // Assumed themed
+import { useAuth } from "../../context/AuthContext"; // Keeping useAuth as per original
+import { AuthStackParamList } from "../../navigation/types";
+import { borderRadius, colors, spacing, typography } from "../../theme";
+// Redux imports are not used in this version as it uses useAuth from context
+// import { useDispatch } from 'react-redux';
+// import { AppDispatch } from '../../store/store';
+// import { registerUser } from '../../store/slices/authSlice'; // Example if using Redux for signup
 
-// Basic Checkbox Component (as defined before, or use a library)
+// Checkbox Component (Themed)
 interface CheckboxProps {
 	labelComponent: React.ReactNode;
 	checked: boolean;
@@ -44,7 +49,13 @@ const Checkbox: React.FC<CheckboxProps> = ({
 				styles.checkboxSquare,
 				checked && styles.checkboxSquareChecked,
 			]}>
-			{checked && <Text style={styles.checkboxCheckmark}>✓</Text>}
+			{checked && (
+				<MaterialIcons
+					name="check"
+					size={16}
+					color={colors.buttonPrimaryText}
+				/>
+			)}
 		</View>
 		{labelComponent}
 	</TouchableOpacity>
@@ -68,7 +79,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [isSigningUp, setIsSigningUp] = useState(false);
-	const { signUpAndSignIn } = useAuth();
+	const { signUpAndSignIn } = useAuth(); // Using context-based auth
 
 	const handleSignup = async () => {
 		if (
@@ -84,6 +95,14 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 			Alert.alert("Validation Error", "Passwords do not match.");
 			return;
 		}
+		if (password.length < 6) {
+			// Example: Minimum password length
+			Alert.alert(
+				"Validation Error",
+				"Password must be at least 6 characters long."
+			);
+			return;
+		}
 		if (!agreedToTerms) {
 			Alert.alert(
 				"Agreement Required",
@@ -93,7 +112,12 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 		}
 
 		setIsSigningUp(true);
-		const result = await signUpAndSignIn(fullName, email, password);
+		// Using context-based signUpAndSignIn
+		const result = await signUpAndSignIn(
+			fullName.trim(),
+			email.trim(),
+			password
+		);
 		setIsSigningUp(false);
 
 		if (!result.success) {
@@ -103,7 +127,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 					"Could not create your account. Please try again."
 			);
 		}
-		// Successful signup will automatically navigate due to AppNavigator's state change
+		// Successful signup will automatically navigate due to AppNavigator's auth state change
 	};
 
 	const handleTermsPress = () => {
@@ -121,15 +145,17 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 
 	const termsAndPolicyLabel = (
 		<Text style={styles.checkboxLabelText}>
-			I agree to Bikya's
+			I agree to Bikya's{" "}
 			<Text style={styles.linkTextUnderlined} onPress={handleTermsPress}>
-				terms&
+				Terms of Service
 			</Text>
+			{" & "}
 			<Text
 				style={styles.linkTextUnderlined}
 				onPress={handlePrivacyPolicyPress}>
-				privacy policy
+				Privacy Policy
 			</Text>
+			.
 		</Text>
 	);
 
@@ -141,35 +167,35 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 				contentContainerStyle={styles.scrollContainer}
 				keyboardShouldPersistTaps="handled">
 				<View style={styles.container}>
-					
 					<View style={styles.headerContainer}>
-						<Text style={styles.headerTitle}>Create Account</Text>
+						<Text style={styles.headerTitle}>
+							Create Your Account
+						</Text>
 						<Text style={styles.subHeaderTitle}>
-							Join Bikya today
+							Let's get started with Bikya!
 						</Text>
 					</View>
 
-				
 					<View style={styles.formContainer}>
-						<StyledTextInput
+						<StyledTextInput // Assumed themed
 							label="Full Name"
 							placeholder="Enter your full name"
 							value={fullName}
 							onChangeText={setFullName}
 							containerStyle={styles.inputContainer}
 						/>
-						<StyledTextInput
-							label="Email"
-							placeholder="Enter your email"
+						<StyledTextInput // Assumed themed
+							label="Email Address"
+							placeholder="you@example.com"
 							value={email}
 							onChangeText={setEmail}
 							keyboardType="email-address"
 							autoCapitalize="none"
 							containerStyle={styles.inputContainer}
 						/>
-						<StyledTextInput
+						<StyledTextInput // Assumed themed
 							label="Password"
-							placeholder="Create a password"
+							placeholder="Create a strong password"
 							value={password}
 							onChangeText={setPassword}
 							secureTextEntry={!showPassword}
@@ -179,16 +205,22 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 										setShowPassword(!showPassword)
 									}
 									style={styles.eyeIconTouchable}>
-									<Text style={styles.eyeIcon}>
-										{showPassword ? "👁️" : "🙈"}
-									</Text>
+									<MaterialIcons
+										name={
+											showPassword
+												? "visibility"
+												: "visibility-off"
+										}
+										size={22}
+										color={colors.iconDefault} // Themed icon color
+									/>
 								</TouchableOpacity>
 							}
 							containerStyle={styles.inputContainer}
 						/>
-						<StyledTextInput
+						<StyledTextInput // Assumed themed
 							label="Confirm Password"
-							placeholder="Confirm your password"
+							placeholder="Re-enter your password"
 							value={confirmPassword}
 							onChangeText={setConfirmPassword}
 							secureTextEntry={!showConfirmPassword}
@@ -200,9 +232,15 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 										)
 									}
 									style={styles.eyeIconTouchable}>
-									<Text style={styles.eyeIcon}>
-										{showConfirmPassword ? "👁️" : "🙈"}
-									</Text>
+									<MaterialIcons
+										name={
+											showConfirmPassword
+												? "visibility"
+												: "visibility-off"
+										}
+										size={22}
+										color={colors.iconDefault} // Themed icon color
+									/>
 								</TouchableOpacity>
 							}
 							containerStyle={styles.inputContainer}
@@ -213,9 +251,10 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 							checked={agreedToTerms}
 							onPress={() => setAgreedToTerms(!agreedToTerms)}
 							accessibilityLabel="Agree to terms and privacy policy"
+							containerStyle={styles.checkboxContainerFull}
 						/>
 
-						<PrimaryButton
+						<PrimaryButton // Assumed themed
 							title="Sign Up"
 							onPress={handleSignup}
 							isLoading={isSigningUp}
@@ -224,7 +263,6 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 						/>
 					</View>
 
-					
 					<View style={styles.footer}>
 						<Text style={styles.footerText}>
 							Already have an account?
@@ -245,11 +283,12 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
 	keyboardAvoidingContainer: {
 		flex: 1,
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	scrollContainer: {
 		flexGrow: 1,
 		justifyContent: "center",
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	container: {
 		flex: 1,
@@ -258,86 +297,91 @@ const styles = StyleSheet.create({
 		paddingVertical: spacing.xl,
 	},
 	headerContainer: {
-		alignItems: "flex-start", // Align text to left as per design
+		alignItems: "flex-start",
 		marginBottom: spacing.xl,
 		width: "100%",
 	},
 	headerTitle: {
-		fontSize: typography.fontSizes.xxxl, // e.g., 28
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
+		fontSize: typography.fontSizes.xxxl,
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary, // Light text
 		marginBottom: spacing.xs,
 	},
 	subHeaderTitle: {
-		fontSize: typography.fontSizes.l, // e.g., 16
-		color: colors.textSecondary,
+		fontSize: typography.fontSizes.l,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
 	},
 	formContainer: {
 		width: "100%",
 	},
 	inputContainer: {
-		marginBottom: spacing.m,
+		// For StyledTextInput wrapper
+		marginBottom: spacing.l, // Increased space
+		// StyledTextInput handles its own internal theming
 	},
 	eyeIconTouchable: {
 		padding: spacing.s,
 	},
-	eyeIcon: {
-		fontSize: typography.fontSizes.l,
-		color: colors.textMedium,
-	},
+	// eyeIcon removed, using MaterialIcons now
 	checkboxBaseContainer: {
 		flexDirection: "row",
 		alignItems: "center",
 		marginVertical: spacing.l,
-		// alignSelf: 'flex-start', // If form is centered and checkbox needs to be left
+	},
+	checkboxContainerFull: {
+		// If checkbox needs to span full width or have specific margin
+		// No specific style here if default is fine
 	},
 	checkboxSquare: {
 		width: 22,
 		height: 22,
 		borderWidth: 1.5,
-		borderColor: colors.primary,
+		borderColor: colors.borderDefault, // Themed border for unchecked
 		borderRadius: borderRadius.s,
 		marginRight: spacing.m,
 		justifyContent: "center",
 		alignItems: "center",
+		backgroundColor: colors.backgroundCard, // Dark background for checkbox square
 	},
 	checkboxSquareChecked: {
-		backgroundColor: colors.primary,
+		backgroundColor: colors.primary, // Primary color when checked
 		borderColor: colors.primary,
 	},
-	checkboxCheckmark: {
-		color: colors.white,
-		fontSize: typography.fontSizes.s - 2,
-		fontWeight: "bold",
-	},
+	// checkboxCheckmark removed, using MaterialIcons now
 	checkboxLabelText: {
-		fontSize: typography.fontSizes.s, // Slightly smaller for checkbox label
-		color: colors.textSecondary,
-		flexShrink: 1, // Allow text to wrap
-		lineHeight: typography.fontSizes.s * 1.4,
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text for checkbox label
+		flexShrink: 1,
+		lineHeight: typography.lineHeights.getForSize(
+			typography.fontSizes.s,
+			"body"
+		),
 	},
 	linkTextUnderlined: {
-		// For terms & policy
-		color: colors.primary,
-		fontWeight: typography.fontWeights.medium,
+		color: colors.textLink, // Themed link color
+		fontFamily: typography.primaryMedium,
 		textDecorationLine: "underline",
 	},
 	signupButton: {
-		marginTop: spacing.s,
+		marginTop: spacing.m, // Adjusted margin
+		// PrimaryButton handles its own theming
 	},
 	footer: {
 		flexDirection: "row",
 		justifyContent: "center",
 		alignItems: "center",
-		marginTop: spacing.xl,
+		marginTop: spacing.xl, // Increased margin
 	},
 	footerText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
 	},
 	linkText: {
-		color: colors.primary,
-		fontWeight: typography.fontWeights.semiBold,
+		color: colors.textLink, // Themed link color
+		fontFamily: typography.primarySemiBold,
 		marginLeft: spacing.xs,
 	},
 });

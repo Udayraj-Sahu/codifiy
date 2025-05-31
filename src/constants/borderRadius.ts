@@ -1,4 +1,4 @@
-// src/theme/borderRadius.ts
+// theme/borderRadius.ts
 export const borderRadius = {
   none: 0,
   s: 4,

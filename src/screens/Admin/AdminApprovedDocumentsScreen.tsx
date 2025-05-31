@@ -8,18 +8,26 @@ import React, {
 	useState,
 } from "react";
 import {
-	FlatList, // For search if toggled
+	ActivityIndicator,
+	FlatList,
+	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	Text,
-	// Image, // Not directly in card as per description, but document type icon
 	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { AdminStackParamList } from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // For icons
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
+import {
+	AdminStackParamList,
+	DocumentStatusAdmin,
+} from "../../navigation/types";
+import { borderRadius, colors, spacing, typography } from "../../theme";
+// Redux imports would go here for actual data fetching
+// import { useDispatch, useSelector } from "react-redux";
+// import { AppDispatch, RootState } from "../../store/store";
+// import { fetchAdminDocumentsThunk } from "../../store/slices/documentSlice";
 
 // --- Types and Dummy Data ---
 type TimeFilterType = "All" | "Today" | "This Week" | "This Month";
@@ -27,11 +35,22 @@ interface ApprovedDocument {
 	id: string;
 	userName: string;
 	userEmail: string;
-	documentType: "Driving License" | "ID Proof" | "Passport"; // Example types
-	docIconPlaceholder: string; // e.g., '📄', '💳', '🛂'
-	approvalTimestamp: string; // e.g., "Today, 2:30 PM"
-	documentIdToView: string; // For navigating to viewer
+	documentType: "Driving License" | "ID Proof" | "Passport";
+	docIconName: keyof typeof MaterialIcons.glyphMap; // Changed from docIconPlaceholder
+	approvalTimestamp: string;
+	documentIdToView: string; // For navigating to viewer (should match id usually)
+	documentImageUrl?: string; // Added to pass to viewer screen
 }
+
+// Helper to get icon name based on document type
+const getDocIconNameHelper = (
+	docType: ApprovedDocument["documentType"]
+): keyof typeof MaterialIcons.glyphMap => {
+	if (docType.toLowerCase().includes("license")) return "credit-card";
+	if (docType.toLowerCase().includes("id")) return "badge";
+	if (docType.toLowerCase().includes("passport")) return "book";
+	return "article"; // Default document icon
+};
 
 const DUMMY_APPROVED_DOCUMENTS: ApprovedDocument[] = [
 	{
@@ -39,46 +58,35 @@ const DUMMY_APPROVED_DOCUMENTS: ApprovedDocument[] = [
 		userName: "Sarah Johnson",
 		userEmail: "sarah.j@example.com",
 		documentType: "Driving License",
-		docIconPlaceholder: "💳",
+		docIconName: getDocIconNameHelper("Driving License"),
 		approvalTimestamp: "Today, 2:30 PM",
 		documentIdToView: "dl123",
-	},
-	{
-		id: "doc2",
-		userName: "Michael Chen",
-		userEmail: "michael.c@example.com",
-		documentType: "ID Proof",
-		docIconPlaceholder: "📄",
-		approvalTimestamp: "Today, 11:45 AM",
-		documentIdToView: "id456",
-	},
-	{
-		id: "doc3",
-		userName: "Emma Wilson",
-		userEmail: "emma.w@example.com",
-		documentType: "Passport",
-		docIconPlaceholder: "🛂",
-		approvalTimestamp: "Yesterday, 4:15 PM",
-		documentIdToView: "pp789",
+		documentImageUrl:
+			"https://placehold.co/800x600/1A1A1A/F5F5F5?text=SJ+DL",
 	},
 	{
 		id: "doc4",
 		userName: "David Lee",
 		userEmail: "david.l@example.com",
 		documentType: "Driving License",
-		docIconPlaceholder: "💳",
+		docIconName: getDocIconNameHelper("Driving License"),
 		approvalTimestamp: "This Week, Mon 9:00 AM",
 		documentIdToView: "dl012",
+		documentImageUrl:
+			"https://placehold.co/800x600/1A1A1A/F5F5F5?text=DL+DL",
 	},
 	{
-		id: "doc5",
-		userName: "Olivia Brown",
-		userEmail: "olivia.b@example.com",
-		documentType: "ID Proof",
-		docIconPlaceholder: "📄",
-		approvalTimestamp: "Last Month, May 15",
-		documentIdToView: "id345",
+		id: "doc6",
+		userName: "James White",
+		userEmail: "james.w@example.com",
+		documentType: "Passport",
+		docIconName: getDocIconNameHelper("Passport"),
+		approvalTimestamp: "Last Week, Fri 10:00 AM",
+		documentIdToView: "pp789",
+		documentImageUrl:
+			"https://placehold.co/800x600/1A1A1A/F5F5F5?text=JW+Pass",
 	},
+	// Only approved documents for this screen's dummy data
 ];
 
 const fetchApprovedDocumentsAPI = async (filters: {
@@ -88,8 +96,9 @@ const fetchApprovedDocumentsAPI = async (filters: {
 	console.log("Fetching approved documents with filters:", filters);
 	return new Promise((resolve) => {
 		setTimeout(() => {
-			let docs = DUMMY_APPROVED_DOCUMENTS;
-			// Simulate filtering (in a real app, backend handles this)
+			let docs = DUMMY_APPROVED_DOCUMENTS.filter(
+				(d) => d.status === "approved"
+			); // Assuming status is part of the full object
 			if (filters.searchQuery && filters.searchQuery.trim() !== "") {
 				const sq = filters.searchQuery.toLowerCase();
 				docs = docs.filter(
@@ -98,7 +107,7 @@ const fetchApprovedDocumentsAPI = async (filters: {
 						d.userEmail.toLowerCase().includes(sq)
 				);
 			}
-			// Simulate time filtering very crudely
+			// Simulate time filtering crudely
 			if (filters.timeFilter === "Today")
 				docs = docs.filter((d) =>
 					d.approvalTimestamp.includes("Today")
@@ -109,15 +118,19 @@ const fetchApprovedDocumentsAPI = async (filters: {
 						d.approvalTimestamp.includes("Week") ||
 						d.approvalTimestamp.includes("Today") ||
 						d.approvalTimestamp.includes("Yesterday")
-				); // very basic
-			// else if (filters.timeFilter === 'This Month') // more complex date logic
-			resolve([...docs]);
+				);
+			resolve([
+				...docs.map((d) => ({
+					...d,
+					docIconName: getDocIconNameHelper(d.documentType),
+				})),
+			]); // Ensure iconName is set
 		}, 300);
 	});
 };
 // --- End Dummy Data ---
 
-// --- Reusable Components (Inline) ---
+// --- Reusable Components (Themed) ---
 interface FilterPillButtonProps {
 	label: string;
 	isActive: boolean;
@@ -144,13 +157,32 @@ const FilterPillButton: React.FC<FilterPillButtonProps> = ({
 
 interface ApprovedDocCardProps {
 	item: ApprovedDocument;
-	onViewDocument: (docId: string, userName: string) => void;
+	onViewDocument: (
+		docId: string,
+		userName: string,
+		documentType: string,
+		status: string,
+		approvalTimestamp?: string,
+		imageUrl?: string
+	) => void;
 }
 const ApprovedDocumentCard: React.FC<ApprovedDocCardProps> = ({
 	item,
 	onViewDocument,
 }) => (
-	<View style={styles.documentCard}>
+	<TouchableOpacity
+		style={styles.documentCard}
+		onPress={() =>
+			onViewDocument(
+				item.documentIdToView,
+				item.userName,
+				item.documentType,
+				item.status,
+				item.approvalTimestamp,
+				item.documentImageUrl
+			)
+		}
+		activeOpacity={0.8}>
 		<View style={styles.cardHeader}>
 			<View style={styles.userInfo}>
 				<Text style={styles.userNameText} numberOfLines={1}>
@@ -160,31 +192,49 @@ const ApprovedDocumentCard: React.FC<ApprovedDocCardProps> = ({
 					{item.userEmail}
 				</Text>
 			</View>
-			<View style={styles.approvedBadge}>
-				<Text style={styles.approvedBadgeText}>Approved</Text>
+			<View style={[styles.statusBadge, styles.statusBadgeApproved]}>
+				<MaterialIcons
+					name="check-circle"
+					size={12}
+					color={colors.success}
+					style={{ marginRight: spacing.xs }}
+				/>
+				<Text
+					style={[styles.statusBadgeText, styles.statusTextApproved]}>
+					Approved
+				</Text>
 			</View>
 		</View>
 		<View style={styles.documentTypeRow}>
-			<Text style={styles.documentTypeIcon}>
-				{item.docIconPlaceholder}
-			</Text>
+			<MaterialIcons
+				name={item.docIconName}
+				size={20}
+				color={colors.iconDefault}
+				style={styles.documentTypeIconThemed}
+			/>
 			<Text style={styles.documentTypeText}>{item.documentType}</Text>
 		</View>
 		<View style={styles.timestampRow}>
-			<Text style={styles.timestampIcon}>🕒</Text>
-			<Text style={styles.timestampText}>{item.approvalTimestamp}</Text>
+			<MaterialIcons
+				name="event-available"
+				size={16}
+				color={colors.iconDefault}
+				style={styles.timestampIconThemed}
+			/>
+			<Text style={styles.timestampText}>
+				Approved: {item.approvalTimestamp}
+			</Text>
 		</View>
-		<TouchableOpacity
-			style={styles.viewDocumentButton}
-			onPress={() =>
-				onViewDocument(item.documentIdToView, item.userName)
-			}>
-			<Text style={styles.viewDocumentButtonText}>View Document</Text>
-			<Text style={styles.viewDocumentButtonArrow}> ›</Text>
-		</TouchableOpacity>
-	</View>
+		<View style={styles.cardFooterActions}>
+			<Text style={styles.viewDetailsPromptText}>Tap to view</Text>
+			<MaterialIcons
+				name="arrow-forward-ios"
+				size={16}
+				color={colors.textPlaceholder}
+			/>
+		</View>
+	</TouchableOpacity>
 );
-// --- End Reusable Components ---
 
 type ScreenNavigationProp = StackNavigationProp<
 	AdminStackParamList,
@@ -194,7 +244,6 @@ type ScreenRouteProp = RouteProp<
 	AdminStackParamList,
 	"AdminApprovedDocumentsScreen"
 >;
-
 interface AdminApprovedDocumentsScreenProps {
 	navigation: ScreenNavigationProp;
 	route: ScreenRouteProp;
@@ -202,7 +251,7 @@ interface AdminApprovedDocumentsScreenProps {
 
 const AdminApprovedDocumentsScreen: React.FC<
 	AdminApprovedDocumentsScreenProps
-> = ({ navigation, route }) => {
+> = ({ route, navigation }) => {
 	const [documents, setDocuments] = useState<ApprovedDocument[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [activeTimeFilter, setActiveTimeFilter] = useState<TimeFilterType>(
@@ -230,26 +279,36 @@ const AdminApprovedDocumentsScreen: React.FC<
 
 	useLayoutEffect(() => {
 		navigation.setOptions({
-			title: "Approved Documents", // Centered by default if headerLeft is present or title is long
-			headerTitleAlign: "center",
-			// Back arrow is usually handled by default if this screen is not the first in stack
+			title: "Approved Documents",
 			headerRight: () => (
 				<TouchableOpacity
 					onPress={() => setShowSearchInput((prev) => !prev)}
 					style={{ marginRight: spacing.m }}>
-					{/* <Icon name={showSearchInput ? "close" : "magnify"} size={24} color={colors.textPrimary} /> */}
-					<Text style={{ fontSize: 22, color: colors.textPrimary }}>
-						{showSearchInput ? "✕" : "🔍"}
-					</Text>
+					<MaterialIcons
+						name={showSearchInput ? "close" : "search"}
+						size={24}
+						color={colors.iconWhite}
+					/>
 				</TouchableOpacity>
 			),
 		});
-	}, [navigation, showSearchInput]);
+	}, [navigation, showSearchInput, colors.iconWhite]);
 
-	const handleViewDocument = (docId: string, userName: string) => {
+	const handleViewDocument = (
+		docId: string,
+		userName: string,
+		documentType: string,
+		status: string,
+		approvalTimestamp?: string,
+		imageUrl?: string
+	) => {
 		navigation.navigate("AdminDocumentViewerScreen", {
 			documentId: docId,
 			userName,
+			documentType,
+			status: status as Exclude<DocumentStatusAdmin, "all">, // Ensure status matches type
+			submittedDate: approvalTimestamp, // Using approvalTimestamp as submittedDate for viewer
+			documentImageUrl: imageUrl,
 		});
 	};
 
@@ -263,7 +322,8 @@ const AdminApprovedDocumentsScreen: React.FC<
 	if (isLoading && documents.length === 0) {
 		return (
 			<View style={styles.centered}>
-				<Text>Loading documents...</Text>
+				<ActivityIndicator size="large" color={colors.primary} />
+				<Text style={styles.loadingText}>Loading documents...</Text>
 			</View>
 		);
 	}
@@ -274,15 +334,15 @@ const AdminApprovedDocumentsScreen: React.FC<
 				<View style={styles.searchBarContainer}>
 					<TextInput
 						style={styles.searchInput}
-						placeholder="Search by name or email..."
+						placeholder="Search by user name or email..."
 						value={searchQuery}
 						onChangeText={setSearchQuery}
 						placeholderTextColor={colors.textPlaceholder}
 						autoFocus
+						returnKeyType="search"
 					/>
 				</View>
 			)}
-			{/* Filter Tabs */}
 			<View style={styles.filterTabsContainer}>
 				<ScrollView
 					horizontal
@@ -301,6 +361,11 @@ const AdminApprovedDocumentsScreen: React.FC<
 
 			{documents.length === 0 && !isLoading ? (
 				<View style={styles.centered}>
+					<MaterialIcons
+						name="check-circle-outline"
+						size={48}
+						color={colors.textDisabled}
+					/>
 					<Text style={styles.noResultsText}>
 						No approved documents match your criteria.
 					</Text>
@@ -317,9 +382,15 @@ const AdminApprovedDocumentsScreen: React.FC<
 					keyExtractor={(item) => item.id}
 					contentContainerStyle={styles.listContentContainer}
 					showsVerticalScrollIndicator={false}
-					refreshing={isLoading}
-					onRefresh={() =>
-						loadDocuments(activeTimeFilter, searchQuery)
+					refreshControl={
+						<RefreshControl
+							refreshing={isLoading}
+							onRefresh={() =>
+								loadDocuments(activeTimeFilter, searchQuery)
+							}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
 					}
 				/>
 			)}
@@ -330,153 +401,173 @@ const AdminApprovedDocumentsScreen: React.FC<
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		backgroundColor: colors.backgroundMain,
 	},
 	centered: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.l,
+		backgroundColor: colors.backgroundMain,
+	},
+	loadingText: {
+		marginTop: spacing.s,
+		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
 	},
 	searchBarContainer: {
 		paddingHorizontal: spacing.m,
 		paddingTop: spacing.s,
 		paddingBottom: spacing.m,
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard,
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
 	searchInput: {
-		backgroundColor: colors.backgroundLight || "#F0F3F7",
+		backgroundColor: colors.backgroundInput,
 		borderRadius: borderRadius.m,
 		paddingHorizontal: spacing.m,
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		height: 44,
 		color: colors.textPrimary,
 	},
 	filterTabsContainer: {
-		paddingHorizontal: spacing.m,
-		paddingVertical: spacing.m,
-		backgroundColor: colors.white,
+		// Renamed from filterTabsRow for clarity
+		backgroundColor: colors.backgroundCard,
+		paddingVertical: spacing.m, // Consistent padding
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
-	filterTabsScroll: {},
+	filterTabsScroll: {
+		paddingHorizontal: spacing.m, // Ensure padding for first/last items in scroll
+	},
 	filterPill: {
-		paddingVertical: spacing.s - 2,
+		paddingVertical: spacing.s, // Adjusted padding
 		paddingHorizontal: spacing.l,
 		borderRadius: borderRadius.pill,
 		marginRight: spacing.s,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.backgroundInput, // Darker unselected pill
 		borderWidth: 1,
 		borderColor: colors.borderDefault,
 	},
 	filterPillActive: {
-		backgroundColor: colors.primaryLight,
+		backgroundColor: colors.primaryMuted, // Muted primary for active
 		borderColor: colors.primary,
 	},
 	filterPillText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+		color: colors.textSecondary,
 	},
 	filterPillTextActive: {
-		color: colors.primaryDark || colors.primary,
-		fontWeight: typography.fontWeights.bold,
+		color: colors.primary, // Primary color for text
+		fontFamily: typography.primaryBold,
 	},
-	listContentContainer: { padding: spacing.m },
+	listContentContainer: {
+		padding: spacing.m,
+		flexGrow: 1,
+	},
 	noResultsText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
 		textAlign: "center",
+		marginTop: spacing.xl,
 	},
-	// ApprovedDocumentCard Styles
 	documentCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard,
 		borderRadius: borderRadius.l,
 		padding: spacing.m,
 		marginBottom: spacing.m,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.07,
-		shadowRadius: 3,
-		elevation: 2,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	cardHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "flex-start",
-		marginBottom: spacing.s,
+		marginBottom: spacing.m,
 	},
 	userInfo: { flex: 1, marginRight: spacing.s },
 	userNameText: {
-		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.bold,
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryBold,
 		color: colors.textPrimary,
 	},
 	userEmailText: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 	},
+	statusBadge: {
+		// Generic badge style
+		paddingHorizontal: spacing.m,
+		paddingVertical: spacing.s - spacing.xxs,
+		borderRadius: borderRadius.pill,
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	statusBadgeText: {
+		// Base for all status texts
+		fontSize: typography.fontSizes.xs,
+		fontFamily: typography.primaryBold,
+		textTransform: "capitalize",
+	},
 	approvedBadge: {
-		backgroundColor: "#D4EFDF",
-		paddingHorizontal: spacing.s,
-		paddingVertical: spacing.xxs + 1,
-		borderRadius: borderRadius.s,
+		// Specific for "Approved" badge in this screen
+		backgroundColor: colors.successMuted, // Muted success background
 	},
 	approvedBadgeText: {
-		color: "#1D8348",
-		fontSize: typography.fontSizes.xs,
-		fontWeight: typography.fontWeights.bold,
+		// Specific for "Approved" text
+		color: colors.success, // Bright success text
 	},
 	documentTypeRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		marginVertical: spacing.s,
+		marginVertical: spacing.xs,
 	},
-	documentTypeIcon: {
-		fontSize: 18,
-		color: colors.textMedium,
+	documentTypeIconThemed: {
+		// For MaterialIcons
 		marginRight: spacing.s,
 	},
 	documentTypeText: {
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		color: colors.textPrimary,
 	},
 	timestampRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		marginBottom: spacing.m,
+		marginBottom: spacing.s,
 	},
-	timestampIcon: {
-		fontSize: 14,
-		color: colors.textMedium,
+	timestampIconThemed: {
+		// For MaterialIcons
 		marginRight: spacing.s,
 	},
 	timestampText: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 	},
-	viewDocumentButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: colors.primary, // Blue as per prompt, using primary (green) for now
-		paddingVertical: spacing.m - 2,
-		borderRadius: borderRadius.m,
+	cardFooterActions: {
+		// View prompt for the card
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderTopColor: colors.borderDefault,
+		paddingTop: spacing.s,
 		marginTop: spacing.s,
+		flexDirection: "row",
+		justifyContent: "flex-end",
+		alignItems: "center",
 	},
-	viewDocumentButtonText: {
-		color: colors.white,
-		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.semiBold,
+	viewDetailsPromptText: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegularItalic,
+		color: colors.textPlaceholder,
+		marginRight: spacing.xs,
 	},
-	viewDocumentButtonArrow: {
-		color: colors.white,
-		fontSize: typography.fontSizes.l,
-		marginLeft: spacing.xs,
-		fontWeight: "bold",
-	},
+	// Removed viewDocumentButton styles as the whole card is pressable
+	// and a prompt is added instead.
 });
 
 export default AdminApprovedDocumentsScreen;

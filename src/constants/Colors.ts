@@ -1,69 +1,68 @@
-// src/theme/colors.ts
+// theme/colors.ts (or your chosen path)
 
-// It's good practice to define your palette first
-const palette = {
-  // Primary Colors
-  greenPrimary: '#A0D911', // Your Bikya primary green (confirm exact hex)
-  greenDark: '#79A80D',   // A darker shade for presses or variants
-  greenLight: '#D3EAA4',  // A lighter shade for disabled or backgrounds
+export const palette = {
+	// Primary Accent (from buttons and branding in the target image)
+	primaryBlue: "#5B6CFF", // Indigo/blue used in buttons like "Reserve"
+	primaryBlueDark: "#3E4ACC", // Slightly darker shade for presses
+	primaryBlueLight: "#AEB7FF", // Lighter shade
 
-  // Neutral Colors
-  black: '#000000',
-  greyDarkest: '#1A1A1A', // For very dark text, like main headers
-  greyDark: '#333333',    // For general body text, input text
-  greyMedium: '#666666',   // For secondary text, labels
-  greyLight: '#888888',    // For placeholders, tertiary text
-  greyLighter: '#AAAAAA',
-  greyLightest: '#DDDDDD', // For borders
-  borderFocus: '#CCCCCC',   // Example for focused input border
-  backgroundLight: '#F5F5F5',// For disabled inputs or subtle backgrounds
-  white: '#FFFFFF',
+	// Base Neutrals from the target image
+	black: "#000000",
+	darkBackground: "#0A0A0A", // App main background
+	cardBackground: "#1A1A1A", // Cards/containers background
 
-  // Accent & Status Colors
-  error: '#FF3B30',       // iOS-like error red
-  warning: '#FF9500',     // iOS-like warning orange
-  success: '#34C759',     // iOS-like success green
-  info: '#007AFF',        // iOS-like info blue
-  starYellow: '#FFD700',   // For star ratings
+	// Text Colors from the target image
+	textLight: "#F5F5F5", // Main headings, primary text
+	textMedium: "#A0A0A0", // Subtext, labels, secondary details
+	textPlaceholderGray: "#888888", // Placeholder text
+
+	// Standard Colors
+	white: "#FFFFFF",
+	errorRed: "#FF3B30",
+	borderGray: "#2A2A2A",
 };
 
 export const colors = {
-  primary: palette.greenPrimary,
-  primaryDark: palette.greenDark,
-  primaryLight: palette.greenLight,
-  primaryDisabled: palette.greenLight, // Or a specific grey
+	primary: palette.primaryBlue,
+	primaryDark: palette.primaryBlueDark,
+	primaryLight: palette.primaryBlueLight,
+	primaryDisabled: palette.primaryBlueLight, // Often uses a lighter/desaturated primary
 
-  textPrimary: palette.greyDarkest,
-  textSecondary: palette.greyDark,
-  textTertiary: palette.greyMedium,
-  textPlaceholder: palette.greyLight,
-  textWhite: palette.white,
-  textError: palette.error,
-  textLink: palette.greenPrimary,
-  textMedium: palette.greenPrimary,
+	backgroundMain: palette.darkBackground,
+	backgroundHeader: palette.darkBackground, // Header matches main background in image
+	backgroundCard: palette.cardBackground, // For UI elements like cards, search bar
+	backgroundDisabled: palette.cardBackground, // Or a slightly different shade
 
-  backgroundMain: palette.white, // Or a very light grey for overall app bg
-  backgroundHeader: palette.white,
-  backgroundCard: palette.white,
-  backgroundDisabled: palette.backgroundLight,
+	textPrimary: palette.textLight,
+	textSecondary: palette.textMedium,
+	textPlaceholder: palette.textPlaceholderGray,
+	textWhite: palette.white,
+	textError: palette.errorRed,
+	textLink: palette.primaryBlue, // Links often use the primary color
 
-  borderDefault: palette.greyLightest,
-  borderInput: palette.greyLightest,
-  borderInputFocus: palette.borderFocus, // Or primary color
-  borderError: palette.error,
+	borderDefault: palette.borderGray,
+	borderInputFocus: palette.primaryBlue,
+	borderError: palette.errorRed,
 
-  iconDefault: palette.greyMedium,
-  iconPrimary: palette.greenPrimary,
-  iconWhite: palette.white,
+	iconDefault: palette.textMedium, // Default icon color (matches secondary text)
+	iconPrimary: palette.primaryBlue, // Icons that are active or primary
+	iconWhite: palette.white, // Icons that need to be stark white
+	iconPlaceholder: palette.textPlaceholderGray, // Icons in input fields e.g. search icon
 
-  // Specifics from components
-  buttonPrimaryBackground: palette.greenPrimary,
-  buttonPrimaryText: palette.white,
-  buttonPrimaryDisabledBackground: palette.greenLight,
-  buttonPrimaryDisabledText: palette.greyLight, // Or a muted white
+	buttonPrimaryBackground: palette.primaryBlue,
+	buttonPrimaryText: palette.white,
+	buttonPrimaryDisabledBackground: palette.primaryBlueLight, // Or a more greyed out version
+	buttonPrimaryDisabledText: palette.textMedium,
 
-  // ... add more semantic color names as needed
-  ...palette, // Optionally spread the raw palette if direct access is sometimes useful
+	// Specific semantic colors based on usage in the image/components
+	ratingStarColor: palette.primaryBlue, // Color for rating stars
+	shadowColor: palette.black, // For all shadows (typically black)
+	error: "#DC3545", // Bright red for text/icons
+	errorMuted: "#4D1A20", // Darker, desaturated red for backgrounds
+	info: "#17A2B8",
+	// You can continue to alias palette colors directly if needed
+	// but semantic names above are preferred for component styling.
+	...palette, // Expose raw palette too, if desired for specific cases
 };
 
 export type AppColor = keyof typeof colors;

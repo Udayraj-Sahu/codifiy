@@ -1,8 +1,9 @@
 // src/screens/App/Home/HomeScreen.tsx
 import { StackNavigationProp } from "@react-navigation/stack";
-import React, { useCallback, useEffect, useMemo, useState } from "react"; // Added useMemo
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
+	Dimensions,
 	Image,
 	Platform,
 	ScrollView,
@@ -18,78 +19,116 @@ import { HomeStackParamList } from "../../../navigation/types";
 import {
 	fetchNearbyBikes,
 	fetchPopularPicks,
-	Bike as StoreBike, // Use the Bike type from your slice
-} from "../../../store/slices/homeScreenBikeSlice"; // Assuming you have this slice
+	Bike as StoreBike,
+} from "../../../store/slices/homeScreenBikeSlice";
 import { AppDispatch, RootState } from "../../../store/store";
-import { borderRadius, colors, spacing, typography } from "../../../theme";
 
-import * as Location from "expo-location"; // <<< IMPORT EXPO-LOCATION
+// Import from your theme structure
+import { borderRadius, spacing, typography } from "../../../theme"; // Assuming general theme structure is here
+import { colors } from "../../../constants/colors"; // Corrected import for the separated colors.ts
+
+import * as Location from "expo-location";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 
-// --- Types (BikeListItem, BikeTypeFilter, Promotion - can remain as they were or be refined) ---
+// --- Types ---
 export interface BikeListItem {
-	// This should align with what your thunks/selectors provide
 	id: string;
 	name: string;
-	type: string; // category
+	type: string;
 	pricePerHour: number;
 	currencySymbol?: string;
 	imageUrl: string;
 	rating?: number;
 	reviewCount?: number;
-	distanceInKm?: number; // This will be more relevant with live location
+	distanceInKm?: number;
 }
 interface BikeTypeFilter {
 	id: string;
 	name: string;
-	iconPlaceholder: string;
+	iconName: keyof typeof MaterialIcons.glyphMap;
 }
 interface Promotion {
 	id: string;
 	title: string;
 	description: string;
 	imageUrl: string;
+	backgroundColor?: string;
+	textColor?: string;
+	buttonBackgroundColor?: string;
+	buttonTextColor?: string;
 }
 
 const BIKE_TYPE_FILTERS: BikeTypeFilter[] = [
-	{ id: "1", name: "Bike", iconPlaceholder: "🚲" },
-	{ id: "2", name: "Scooter", iconPlaceholder: "🛴" },
-	{ id: "3", name: "Electric", iconPlaceholder: "⚡️" },
-	{ id: "4", name: "Mountain", iconPlaceholder: "⛰️" },
+	{ id: "1", name: "Bike", iconName: "pedal-bike" },
+	{ id: "2", name: "Scooter", iconName: "electric-scooter" },
+	{ id: "3", name: "Electric", iconName: "electric-bike" },
+	{ id: "4", name: "Mountain", iconName: "downhill-skiing" },
 ];
+
 const PROMOTION_BANNER: Promotion = {
 	id: "promo1",
-	title: "First Ride Discount!",
-	description: "Get 10% off on your first booking",
-	imageUrl: "https://via.placeholder.com/300x150.png?text=Rider+Promotion",
+	title: "Your Next Ride Awaits!",
+	description: "Save big with our daily deals.",
+	imageUrl: "https://via.placeholder.com/300x180.png?text=Ride+With+Bikya",
+	backgroundColor: colors.backgroundCard,
+	textColor: colors.textPrimary,
+	buttonBackgroundColor: colors.primary,
+	buttonTextColor: colors.buttonPrimaryText,
 };
 
-// --- Components (FilterChip, PopularPickItem - can remain as they were) ---
+const PrimaryButton: React.FC<{
+	title: string;
+	onPress: () => void;
+	style?: any;
+	textStyle?: any;
+}> = ({ title, onPress, style, textStyle }) => (
+	<TouchableOpacity style={[styles.primaryButton, style]} onPress={onPress}>
+		<Text style={[styles.primaryButtonText, textStyle]}>{title}</Text>
+	</TouchableOpacity>
+);
+
 const FilterChip: React.FC<{
 	item: BikeTypeFilter;
 	isSelected: boolean;
 	onPress: () => void;
 }> = ({ item, isSelected, onPress }) => (
 	<TouchableOpacity
-		style={[styles.filterChip, isSelected ? styles.filterChipSelected : {}]}
+		style={[
+			styles.filterChipBase,
+			isSelected
+				? styles.filterChipSelectedBase
+				: styles.filterChipUnselectedBase,
+		]}
 		onPress={onPress}>
-		<Text style={styles.filterChipIcon}>{item.iconPlaceholder}</Text>
+		<MaterialIcons
+			name={item.iconName}
+			size={typography.fontSizes.m}
+			style={[
+				styles.filterChipIconBase,
+				isSelected
+					? styles.filterChipIconSelected
+					: styles.filterChipIconUnselected,
+			]}
+		/>
 		<Text
 			style={[
-				styles.filterChipText,
-				isSelected ? styles.filterChipTextSelected : {},
+				styles.filterChipTextBase,
+				isSelected
+					? styles.filterChipTextSelected
+					: styles.filterChipTextUnselected,
 			]}>
 			{item.name}
 		</Text>
 	</TouchableOpacity>
 );
+
 const PopularPickItem: React.FC<{ item: BikeListItem; onBook: () => void }> = ({
 	item,
 	onBook,
 }) => (
 	<TouchableOpacity
 		style={styles.popularPickItemContainer}
-		activeOpacity={0.8}
+		activeOpacity={0.9}
 		onPress={onBook}>
 		<Image
 			source={
@@ -106,13 +145,28 @@ const PopularPickItem: React.FC<{ item: BikeListItem; onBook: () => void }> = ({
 			<Text style={styles.popularPickType} numberOfLines={1}>
 				{item.type}
 			</Text>
-			<Text style={styles.popularPickPrice}>
-				{item.currencySymbol || "₹"}
-				{item.pricePerHour}/hr
-			</Text>
+			<View style={styles.popularPickMetaRow}>
+				{item.rating && (
+					<View style={styles.ratingContainer}>
+						<MaterialIcons name="star" style={styles.ratingIcon} />
+						<Text style={styles.ratingText}>
+							{item.rating.toFixed(1)}
+						</Text>
+					</View>
+				)}
+				<Text style={styles.popularPickPrice}>
+					{item.currencySymbol || "₹"}
+					{item.pricePerHour}
+					<Text style={styles.perHourText}>/hr</Text>
+				</Text>
+			</View>
 		</View>
 		<TouchableOpacity style={styles.popularPickBookButton} onPress={onBook}>
-			<Text style={styles.popularPickBookButtonText}>Book</Text>
+			<MaterialIcons
+				name="arrow-forward-ios"
+				size={18}
+				color={colors.buttonPrimaryText}
+			/>
 		</TouchableOpacity>
 	</TouchableOpacity>
 );
@@ -145,34 +199,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 	const [locationErrorMsg, setLocationErrorMsg] = useState<string | null>(
 		null
 	);
-	const [isFetchingLocation, setIsFetchingLocation] = useState(true); // For initial location fetch
-
+	const [isFetchingLocation, setIsFetchingLocation] = useState(true);
 	const [selectedBikeTypeFilter, setSelectedBikeTypeFilter] = useState<
 		string | null
 	>(null);
 
-	// Function to get location and address
 	const getLocationAsync = useCallback(async () => {
 		setIsFetchingLocation(true);
 		setLocationErrorMsg(null);
 		let { status } = await Location.requestForegroundPermissionsAsync();
 		if (status !== "granted") {
 			setLocationErrorMsg(
-				"Permission to access location was denied. Please enable it in settings to see nearby bikes."
+				"Location permission denied. Enable in settings for nearby bikes."
 			);
-			setCurrentLocationDisplay("Location permission denied");
+			setCurrentLocationDisplay("Enable Location Access");
 			setIsFetchingLocation(false);
-			setCurrentCoords(null); // Clear coords if permission denied
+			setCurrentCoords(null);
 			return;
 		}
-
 		try {
 			let location = await Location.getCurrentPositionAsync({
 				accuracy: Location.Accuracy.High,
 			});
 			const { latitude, longitude } = location.coords;
 			setCurrentCoords({ latitude, longitude });
-
 			let addressResponse = await Location.reverseGeocodeAsync({
 				latitude,
 				longitude,
@@ -190,61 +240,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 			}
 		} catch (error: any) {
 			console.error("Error getting location or geocoding:", error);
-			setLocationErrorMsg(
-				"Could not fetch location. Make sure GPS is enabled."
-			);
-			setCurrentLocationDisplay("Location unavailable");
-			setCurrentCoords(null); // Clear coords on error
+			setLocationErrorMsg("Could not fetch location. Ensure GPS is on.");
+			setCurrentLocationDisplay("Location Unavailable");
+			setCurrentCoords(null);
 		}
 		setIsFetchingLocation(false);
 	}, []);
 
-	// Initial location fetch
 	useEffect(() => {
 		getLocationAsync();
 	}, [getLocationAsync]);
 
-	// Fetch nearby bikes when coordinates are available or change
 	const loadNearbyBikes = useCallback(() => {
 		if (currentCoords) {
-			console.log(
-				"HomeScreen: Dispatching fetchNearbyBikes with coords:",
-				currentCoords
-			);
 			dispatch(
 				fetchNearbyBikes({
 					latitude: currentCoords.latitude,
 					longitude: currentCoords.longitude,
-					limit: 5, // Or your desired limit
-					maxDistance: 20000, // e.g. 20km search radius in meters
+					limit: 5,
+					maxDistance: 20000,
 				})
 			);
 		} else if (!isFetchingLocation && !locationErrorMsg) {
-			// Only if not fetching and no perm error
-			// Handle case where coords are null but no error (e.g. couldn't geocode but got coords)
-			// Or if user explicitly denies location after initial prompt.
-			// dispatch(fetchNearbyBikes({})); // Fetch without location, or show a message
-			console.log(
-				"HomeScreen: Cannot fetch nearby bikes, coordinates unavailable."
-			);
+			console.log("HomeScreen: Coords unavailable for nearby bikes.");
 		}
 	}, [dispatch, currentCoords, isFetchingLocation, locationErrorMsg]);
 
-	// Fetch popular picks (doesn't depend on location)
 	const loadPopularPicks = useCallback(() => {
-		console.log("HomeScreen: Dispatching fetchPopularPicks");
-		dispatch(fetchPopularPicks({ limit: 3, sortBy: "averageRating:desc" })); // Example sort
+		dispatch(fetchPopularPicks({ limit: 4, sortBy: "averageRating:desc" }));
 	}, [dispatch]);
 
 	useEffect(() => {
-		loadPopularPicks(); // Load popular picks once
+		loadPopularPicks();
 	}, [loadPopularPicks]);
 
 	useEffect(() => {
-		// This effect will run when currentCoords changes (after location is fetched/updated)
-		// or if locationErrorMsg changes (e.g., permission denied after initially being null)
 		if (!isFetchingLocation) {
-			// Only fetch if not currently in the process of getting location
 			loadNearbyBikes();
 		}
 	}, [currentCoords, isFetchingLocation, locationErrorMsg, loadNearbyBikes]);
@@ -255,12 +286,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 		() => navigation.navigate("NotificationsScreen"),
 		[navigation]
 	);
-	const handleLocationCardPress = () => getLocationAsync(); // Refresh location on press
+	const handleLocationCardPress = () => getLocationAsync();
 	const handleSearchPress = () =>
 		navigation.navigate("ExploreTab" as any, {
 			screen: "Explore",
 			params: { focusSearch: true },
 		});
+
 	const handleBikeTypeFilterPress = (filterId: string) => {
 		const newFilter = selectedBikeTypeFilter === filterId ? null : filterId;
 		setSelectedBikeTypeFilter(newFilter);
@@ -274,13 +306,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 			},
 		});
 	};
-
-	const navigateToBikeDetails = (bikeId: string) => {
+	const navigateToBikeDetails = (bikeId: string) =>
 		navigation.navigate("ExploreTab" as any, {
 			screen: "BikeDetails",
 			params: { bikeId },
 		});
-	};
 
 	const transformedNearbyBikes: BikeListItem[] = useMemo(
 		() =>
@@ -289,18 +319,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 				name: bike.model,
 				type: bike.category,
 				pricePerHour: bike.pricePerHour,
-				imageUrl:
-					bike.images && bike.images.length > 0
-						? bike.images[0].url
-						: "",
-				rating: (bike as any).averageRating, // Assuming these exist or are calculated
+				imageUrl: bike.images?.[0]?.url || "",
+				rating: (bike as any).averageRating,
 				reviewCount: (bike as any).numberOfReviews,
-				// distanceInKm could be calculated if backend returns coordinates for each bike
-				// or if the /nearby endpoint already calculates and returns it.
+				distanceInKm: (bike as any).distance,
 			})),
 		[nearbyBikesFromStore]
 	);
-
 	const transformedPopularPicks: BikeListItem[] = useMemo(
 		() =>
 			popularPicksFromStore.map((bike: StoreBike) => ({
@@ -308,10 +333,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 				name: bike.model,
 				type: bike.category,
 				pricePerHour: bike.pricePerHour,
-				imageUrl:
-					bike.images && bike.images.length > 0
-						? bike.images[0].url
-						: "",
+				imageUrl: bike.images?.[0]?.url || "",
 				rating: (bike as any).averageRating,
 				reviewCount: (bike as any).numberOfReviews,
 			})),
@@ -320,23 +342,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
 	const renderNearbyBikeSection = () => {
 		if (isFetchingLocation && !currentCoords) {
-			// Show location fetching loader first
 			return (
-				<View style={styles.centeredMessage}>
+				<View style={styles.messageContainer}>
 					<ActivityIndicator size="small" color={colors.primary} />
 					<Text style={styles.messageText}>
-						Fetching your location...
+						Finding rides near you...
 					</Text>
 				</View>
 			);
 		}
 		if (locationErrorMsg) {
 			return (
-				<View style={styles.centeredMessage}>
+				<View style={styles.messageContainer}>
+					<MaterialIcons
+						name="location-off"
+						size={40}
+						color={colors.textError}
+						style={{ marginBottom: spacing.s }}
+					/>
 					<Text style={styles.errorText}>{locationErrorMsg}</Text>
 					<PrimaryButton
 						title="Retry Location"
 						onPress={getLocationAsync}
+						style={styles.retryButton}
+						textStyle={styles.retryButtonText}
 					/>
 				</View>
 			);
@@ -346,27 +375,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 				<ActivityIndicator
 					size="large"
 					color={colors.primary}
-					style={styles.loadingIndicator}
+					style={styles.fullPageLoader}
 				/>
 			);
 		}
 		if (errorNearby) {
 			return (
-				<View style={styles.centeredMessage}>
+				<View style={styles.messageContainer}>
+					<MaterialIcons
+						name="error-outline"
+						size={40}
+						color={colors.textError}
+						style={{ marginBottom: spacing.s }}
+					/>
 					<Text style={styles.errorText}>
-						Error loading nearby bikes: {errorNearby}
+						Bikes unavailable: {errorNearby}
 					</Text>
-					<PrimaryButton title="Retry" onPress={loadNearbyBikes} />
+					<PrimaryButton
+						title="Try Again"
+						onPress={loadNearbyBikes}
+						style={styles.retryButton}
+						textStyle={styles.retryButtonText}
+					/>
 				</View>
 			);
 		}
 		if (transformedNearbyBikes.length === 0 && !isLoadingNearby) {
-			// Check !isLoadingNearby here
 			return (
-				<View style={styles.centeredMessage}>
-					<Text style={styles.noBikesText}>
-						No bikes currently found near you. Try expanding search
-						in Explore.
+				<View style={styles.messageContainer}>
+					<MaterialIcons
+						name="sentiment-dissatisfied"
+						size={40}
+						color={colors.textSecondary}
+						style={{ marginBottom: spacing.s }}
+					/>
+					<Text style={styles.emptyStateText}>
+						No bikes currently found nearby.
 					</Text>
 				</View>
 			);
@@ -382,45 +426,60 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 						{...bike}
 						onPressCard={() => navigateToBikeDetails(bike.id)}
 						onPressBookNow={() => navigateToBikeDetails(bike.id)}
-						style={styles.nearbyBikeCard}
+						style={styles.nearbyBikeCardStyle}
 					/>
 				))}
 			</ScrollView>
 		);
 	};
-
 	const renderPopularPicksSection = () => {
-		// ... (renderPopularPicksSection remains similar, using transformedPopularPicks)
 		if (isLoadingPopular && transformedPopularPicks.length === 0) {
 			return (
 				<ActivityIndicator
 					size="large"
 					color={colors.primary}
-					style={styles.loadingIndicator}
+					style={styles.fullPageLoader}
 				/>
 			);
 		}
 		if (errorPopular) {
 			return (
-				<View style={styles.centeredMessage}>
+				<View style={styles.messageContainer}>
+					<MaterialIcons
+						name="error-outline"
+						size={40}
+						color={colors.textError}
+						style={{ marginBottom: spacing.s }}
+					/>
 					<Text style={styles.errorText}>
-						Error loading popular bikes: {errorPopular}
+						Picks unavailable: {errorPopular}
 					</Text>
-					<PrimaryButton title="Retry" onPress={loadPopularPicks} />
+					<PrimaryButton
+						title="Retry"
+						onPress={loadPopularPicks}
+						style={styles.retryButton}
+						textStyle={styles.retryButtonText}
+					/>
 				</View>
 			);
 		}
 		if (transformedPopularPicks.length === 0 && !isLoadingPopular) {
 			return (
-				<View style={styles.centeredMessage}>
-					<Text style={styles.noBikesText}>
-						No popular bikes to show.
+				<View style={styles.messageContainer}>
+					<MaterialIcons
+						name="star-outline"
+						size={40}
+						color={colors.textSecondary}
+						style={{ marginBottom: spacing.s }}
+					/>
+					<Text style={styles.emptyStateText}>
+						No popular picks to show.
 					</Text>
 				</View>
 			);
 		}
 		return (
-			<View style={styles.popularPicksList}>
+			<View style={styles.popularPicksListContainer}>
 				{transformedPopularPicks.map((bike) => (
 					<PopularPickItem
 						key={bike.id}
@@ -433,24 +492,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 	};
 
 	return (
-		<View style={styles.screenContainer}>
-			<View style={styles.topBarContainer}>
+		<View style={styles.screen}>
+			<StatusBar
+				barStyle="light-content"
+				backgroundColor={colors.backgroundHeader}
+			/>
+			<View style={styles.headerContainer}>
 				<TouchableOpacity
 					onPress={handleProfilePress}
-					style={styles.topBarIconTouchable}>
-					<Text style={styles.iconPlaceholder}>👤</Text>
+					style={styles.headerIconContainer}>
+					<MaterialIcons
+						name="account-circle"
+						size={28}
+						color={colors.iconWhite}
+					/>
 				</TouchableOpacity>
-				<Text style={styles.appName}>Bikya</Text>
+				<Image
+					source={require("../../../../assets/images/icon.png")} // Ensure your logo is visible on dark bg
+					style={styles.headerLogo}
+					resizeMode="contain"
+				/>
 				<TouchableOpacity
 					onPress={handleNotificationsPress}
-					style={styles.topBarIconTouchable}>
-					<Text style={styles.iconPlaceholder}>
-						<MaterialIcons
-							name="notifications"
-							size={30}
-							color="black"
-						/>
-					</Text>
+					style={styles.headerIconContainer}>
+					<MaterialIcons
+						name="notifications-none"
+						size={28}
+						color={colors.iconWhite}
+					/>
 				</TouchableOpacity>
 			</View>
 
@@ -459,36 +528,45 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 				contentContainerStyle={styles.scrollContentContainer}
 				showsVerticalScrollIndicator={false}>
 				<TouchableOpacity
-					style={styles.locationCard}
+					style={styles.locationSelectorCard}
 					onPress={handleLocationCardPress}
-					activeOpacity={0.7}>
-					<Text style={styles.iconPlaceholderSmall}><MaterialIcons
-							name="place"
-							size={30}
-							color="black"
-						/></Text>
-					<Text style={styles.locationText} numberOfLines={1}>
+					activeOpacity={0.8}>
+					<MaterialIcons
+						name="location-pin"
+						size={20}
+						color={colors.iconDefault}
+					/>
+					<Text style={styles.locationSelectorText} numberOfLines={1}>
 						{isFetchingLocation
 							? "Updating location..."
 							: currentLocationDisplay}
 					</Text>
-					<Text style={styles.iconPlaceholderSmall}>›</Text>
+					<MaterialIcons
+						name="keyboard-arrow-down"
+						size={24}
+						color={colors.iconDefault}
+					/>
 				</TouchableOpacity>
 
-				{/* Search, Filters, Promo Banner as before */}
 				<TouchableOpacity
-					style={styles.searchBarContainer}
+					style={styles.searchBarTouchable}
 					onPress={handleSearchPress}
 					activeOpacity={0.8}>
-					<Text style={styles.searchBarPlaceholder}>
-						Search bikes or locations
+					<MaterialIcons
+						name="search"
+						size={24}
+						color={colors.iconPlaceholder}
+					/>
+					<Text style={styles.searchBarPlaceholderText}>
+						Search for bikes, destinations...
 					</Text>
 				</TouchableOpacity>
+
 				<View>
 					<ScrollView
 						horizontal
 						showsHorizontalScrollIndicator={false}
-						contentContainerStyle={styles.bikeTypeFiltersContainer}>
+						contentContainerStyle={styles.filterChipsContainer}>
 						{BIKE_TYPE_FILTERS.map((filter) => (
 							<FilterChip
 								key={filter.id}
@@ -503,228 +581,431 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 						))}
 					</ScrollView>
 				</View>
-				<View style={styles.promoBanner}>
-					<View style={styles.promoTextContainer}>
-						<Text style={styles.promoTitle}>
-							{PROMOTION_BANNER.title}
-						</Text>
-						<Text style={styles.promoDescription}>
-							{PROMOTION_BANNER.description}
-						</Text>
-					</View>
-					<Image
-						source={{ uri: PROMOTION_BANNER.imageUrl }}
-						style={styles.promoImage}
-					/>
-				</View>
 
-				<Text style={styles.sectionTitle}>Available Near You</Text>
+				<TouchableOpacity
+					activeOpacity={0.9}
+					onPress={() => {
+						console.log("Promo banner pressed");
+					}}>
+					<View
+						style={[
+							styles.promoBannerCard,
+							{
+								backgroundColor:
+									PROMOTION_BANNER.backgroundColor,
+							},
+						]}>
+						<View style={styles.promoBannerTextContent}>
+							<Text
+								style={[
+									styles.promoBannerTitle,
+									{ color: PROMOTION_BANNER.textColor },
+								]}>
+								{PROMOTION_BANNER.title}
+							</Text>
+							<Text
+								style={[
+									styles.promoBannerDescription,
+									{ color: PROMOTION_BANNER.textColor },
+								]}>
+								{PROMOTION_BANNER.description}
+							</Text>
+							<TouchableOpacity
+								style={[
+									styles.promoButton,
+									{
+										backgroundColor:
+											PROMOTION_BANNER.buttonBackgroundColor,
+									},
+								]}>
+								<Text
+									style={[
+										styles.promoButtonText,
+										{
+											color: PROMOTION_BANNER.buttonTextColor,
+										},
+									]}>
+									Grab Offer
+								</Text>
+								<MaterialIcons
+									name="arrow-forward"
+									size={16}
+									color={PROMOTION_BANNER.buttonTextColor}
+									style={{ marginLeft: spacing.xs }}
+								/>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</TouchableOpacity>
+
+				<View style={styles.sectionHeader}>
+					<Text style={styles.sectionTitle}>Near You</Text>
+					<TouchableOpacity
+						onPress={() =>
+							navigation.navigate("ExploreTab" as any, {
+								screen: "Explore",
+								params: { initialFocus: "nearby" },
+							})
+						}>
+						<Text style={styles.seeAllText}>View Map</Text>
+					</TouchableOpacity>
+				</View>
 				{renderNearbyBikeSection()}
 
-				<Text style={styles.sectionTitle}>Popular Picks</Text>
+				<View style={styles.sectionHeader}>
+					<Text style={styles.sectionTitle}>Popular Picks</Text>
+					<TouchableOpacity
+						onPress={() =>
+							navigation.navigate("ExploreTab" as any, {
+								screen: "Explore",
+								params: { initialFocus: "popular" },
+							})
+						}>
+						<Text style={styles.seeAllText}>More</Text>
+					</TouchableOpacity>
+				</View>
 				{renderPopularPicksSection()}
 			</ScrollView>
 		</View>
 	);
 };
 
-// Styles (Keep existing styles, add styles for error/message text if needed)
-const safeAreaTop =
-	Platform.OS === "android"
-		? StatusBar.currentHeight || spacing.m
-		: spacing.xl;
+const screenPadding = spacing.l;
+
 const styles = StyleSheet.create({
-	screenContainer: { flex: 1, backgroundColor: colors.white || "#FFFFFF" },
-	topBarContainer: {
+	screen: {
+		flex: 1,
+		backgroundColor: colors.backgroundMain,
+	},
+	headerContainer: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		paddingTop: safeAreaTop + spacing.xs,
-		paddingBottom: spacing.s,
-		paddingHorizontal: spacing.m,
-		backgroundColor: colors.white,
+		paddingTop:
+			(Platform.OS === "android" ? StatusBar.currentHeight : 0) ||
+			spacing.s + spacing.s,
+		paddingBottom: spacing.m,
+		paddingHorizontal: screenPadding - spacing.xs,
+		backgroundColor: colors.backgroundHeader,
+		borderBottomWidth: 1,
+		borderBottomColor: colors.borderDefault,
 	},
-	topBarIconTouchable: { padding: spacing.xs },
-	appName: {
+	headerLogo: {
+		height: 30,
+		width: 80,
+	},
+	headerTitle: {
 		fontSize: typography.fontSizes.xl,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
 		color: colors.textPrimary,
+		fontWeight: typography.fontWeights.bold,
 	},
-	iconPlaceholder: { fontSize: 24, color: colors.textPrimary },
-	iconPlaceholderSmall: { fontSize: 18, color: colors.textSecondary },
-	scrollView: { flex: 1 },
-	scrollContentContainer: { paddingBottom: spacing.xl },
-	locationCard: {
+	headerIconContainer: {
+		padding: spacing.s,
+	},
+	scrollView: {
+		flex: 1,
+	},
+	scrollContentContainer: {
+		paddingBottom: spacing.xxl,
+	},
+	locationSelectorCard: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: colors.backgroundLight || "#F5F5F5",
+		backgroundColor: colors.backgroundCard,
+		marginHorizontal: screenPadding,
+		marginTop: spacing.m,
 		paddingHorizontal: spacing.m,
-		paddingVertical: spacing.s + 2,
-		marginHorizontal: spacing.m,
-		borderRadius: borderRadius.m,
-		marginTop: spacing.s,
-		marginBottom: spacing.m,
+		paddingVertical: spacing.m,
+		borderRadius: borderRadius.l,
+		elevation: 2,
+		shadowColor: colors.shadowColor,
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.1,
+		shadowRadius: 3,
 	},
-	locationText: {
+	locationSelectorText: {
 		flex: 1,
-		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryMedium,
+		color: colors.textPrimary,
 		marginLeft: spacing.s,
 	},
-	searchBarContainer: {
+	searchBarTouchable: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: colors.backgroundLight || "#F0F0F0",
-		borderRadius: borderRadius.m,
+		backgroundColor: colors.backgroundCard,
+		marginHorizontal: screenPadding,
+		marginTop: spacing.m,
 		paddingHorizontal: spacing.m,
-		paddingVertical: spacing.m - 2,
-		marginHorizontal: spacing.m,
-		marginBottom: spacing.l,
+		paddingVertical: spacing.m + 2,
+		borderRadius: borderRadius.l,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
-	searchBarPlaceholder: {
+	searchBarPlaceholderText: {
 		flex: 1,
 		fontSize: typography.fontSizes.m,
-		color: colors.textPlaceholder || "#A0A0A0",
+		fontFamily: typography.primaryRegular,
+		color: colors.textPlaceholder,
+		marginLeft: spacing.s,
 	},
-	filterIconTouchable: { paddingLeft: spacing.s },
-	bikeTypeFiltersContainer: {
-		paddingHorizontal: spacing.m,
-		paddingVertical: spacing.s,
-		marginBottom: spacing.m,
+	filterChipsContainer: {
+		paddingHorizontal: screenPadding,
+		paddingTop: spacing.m,
+		paddingBottom: spacing.s,
 	},
-	filterChip: {
+	filterChipBase: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: spacing.m,
+		paddingHorizontal: spacing.l,
 		paddingVertical: spacing.s,
 		borderRadius: borderRadius.pill,
-		backgroundColor: colors.backgroundLight || "#F0F0F0",
 		marginRight: spacing.s,
 		borderWidth: 1,
-		borderColor: "transparent",
 	},
-	filterChipSelected: {
-		backgroundColor: colors.primaryLight || "#D3EAA4",
+	filterChipUnselectedBase: {
+		backgroundColor: colors.backgroundCard,
+		borderColor: colors.borderDefault,
+	},
+	filterChipSelectedBase: {
+		backgroundColor: colors.primary,
 		borderColor: colors.primary,
 	},
-	filterChipIcon: {
-		fontSize: typography.fontSizes.m,
+	filterChipIconBase: {
 		marginRight: spacing.xs,
 	},
-	filterChipText: {
+	filterChipIconUnselected: {
+		color: colors.iconDefault,
+	},
+	filterChipIconSelected: {
+		color: colors.buttonPrimaryText,
+	},
+	filterChipTextBase: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
+		fontFamily: typography.primaryMedium,
+	},
+	filterChipTextUnselected: {
+		color: colors.textSecondary,
 	},
 	filterChipTextSelected: {
-		color: colors.primaryDark || colors.primary,
+		color: colors.buttonPrimaryText,
 		fontWeight: typography.fontWeights.semiBold,
 	},
-	promoBanner: {
+	promoBannerCard: {
 		flexDirection: "row",
-		backgroundColor: colors.primaryLight || "#E6FFFA",
-		borderRadius: borderRadius.l,
-		marginHorizontal: spacing.m,
+		borderRadius: borderRadius.xl,
+		marginHorizontal: screenPadding,
+		marginTop: spacing.l,
 		marginBottom: spacing.l,
-		padding: spacing.m,
-		alignItems: "center",
+		alignItems: "stretch",
 		overflow: "hidden",
+		elevation: 4,
+		shadowColor: colors.shadowColor,
+		shadowOffset: { width: 0, height: 3 },
+		shadowOpacity: 0.15,
+		shadowRadius: 5,
+		minHeight: 140,
 	},
-	promoTextContainer: { flex: 1, marginRight: spacing.s },
-	promoTitle: {
+	promoBannerTextContent: {
+		flex: 1.5,
+		padding: spacing.m,
+		justifyContent: "center",
+	},
+	promoBannerTitle: {
 		fontSize: typography.fontSizes.l,
+		fontFamily: typography.primaryBold,
 		fontWeight: typography.fontWeights.bold,
-		color: colors.primaryDark || colors.primary,
+		marginBottom: spacing.xs,
 	},
-	promoDescription: {
+	promoBannerDescription: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
-		marginTop: spacing.xs,
+		fontFamily: typography.primaryRegular,
+		marginBottom: spacing.m,
+		lineHeight: typography.fontSizes.s * 1.5,
 	},
-	promoImage: { width: 100, height: 80, borderRadius: borderRadius.m },
+	promoButton: {
+		paddingHorizontal: spacing.l,
+		paddingVertical: spacing.s,
+		borderRadius: borderRadius.m,
+		alignSelf: "flex-start",
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	promoButtonText: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryBold,
+		fontWeight: typography.fontWeights.bold,
+	},
+	sectionHeader: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+		marginHorizontal: screenPadding,
+		marginTop: spacing.xl,
+		marginBottom: spacing.m,
+	},
 	sectionTitle: {
 		fontSize: typography.fontSizes.xl,
+		fontFamily: typography.primaryBold,
 		fontWeight: typography.fontWeights.bold,
 		color: colors.textPrimary,
-		marginHorizontal: spacing.m,
-		marginBottom: spacing.s,
-		marginTop: spacing.s,
+	},
+	seeAllText: {
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryMedium,
+		color: colors.textLink,
+		fontWeight: typography.fontWeights.semiBold,
 	},
 	horizontalBikeList: {
-		paddingHorizontal: spacing.m,
+		paddingLeft: screenPadding,
+		paddingRight: screenPadding - spacing.m,
 		paddingVertical: spacing.s,
 	},
-	nearbyBikeCard: { width: 220, marginRight: spacing.m },
-	popularPicksList: { paddingHorizontal: spacing.m },
+	nearbyBikeCardStyle: {
+		width: Dimensions.get("window").width * 0.7,
+		marginRight: spacing.m,
+		backgroundColor: colors.backgroundCard,
+		elevation: 4,
+		shadowColor: colors.shadowColor,
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		borderRadius: borderRadius.l,
+	},
+	popularPicksListContainer: {
+		paddingHorizontal: screenPadding,
+		marginTop: spacing.xs,
+	},
 	popularPickItemContainer: {
 		flexDirection: "row",
-		backgroundColor: colors.white,
-		borderRadius: borderRadius.m,
-		padding: spacing.s,
+		backgroundColor: colors.backgroundCard,
+		borderRadius: borderRadius.l,
+		padding: spacing.m,
 		marginBottom: spacing.m,
 		alignItems: "center",
-		shadowColor: "#000",
+		elevation: 3,
+		shadowColor: colors.shadowColor,
 		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 2,
-		elevation: 1,
+		shadowOpacity: 0.08,
+		shadowRadius: 3,
 	},
 	popularPickImage: {
 		width: 70,
 		height: 70,
-		borderRadius: borderRadius.s,
+		borderRadius: borderRadius.m,
 		marginRight: spacing.m,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.backgroundMain,
 	},
-	popularPickDetails: { flex: 1, justifyContent: "center" },
+	popularPickDetails: {
+		flex: 1,
+		justifyContent: "center",
+	},
 	popularPickName: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.semiBold,
+		fontFamily: typography.primaryBold,
+		fontWeight: typography.fontWeights.bold,
 		color: colors.textPrimary,
 	},
 	popularPickType: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 		marginTop: spacing.xxs,
 	},
-	popularPickPrice: {
-		fontSize: typography.fontSizes.s,
-		color: colors.primary,
-		fontWeight: typography.fontWeights.bold,
+	popularPickMetaRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
 		marginTop: spacing.xs,
+	},
+	ratingContainer: { flexDirection: "row", alignItems: "center" },
+	ratingIcon: {
+		fontSize: typography.fontSizes.m,
+		color: colors.ratingStarColor,
+		marginRight: spacing.xs / 2,
+	},
+	ratingText: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primarySemiBold,
+		color: colors.textPrimary,
+	},
+	popularPickPrice: {
+		fontSize: typography.fontSizes.l,
+		fontFamily: typography.primaryBold,
+		fontWeight: typography.fontWeights.bold,
+		color: colors.textPrimary,
+	},
+	perHourText: {
+		fontSize: typography.fontSizes.xs,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
 	},
 	popularPickBookButton: {
 		backgroundColor: colors.primary,
-		paddingHorizontal: spacing.m,
-		paddingVertical: spacing.s,
-		borderRadius: borderRadius.m,
+		padding: spacing.s,
+		borderRadius: borderRadius.pill,
+		marginLeft: spacing.s,
 	},
-	popularPickBookButtonText: {
-		color: colors.white,
-		fontSize: typography.fontSizes.s,
-		fontWeight: typography.fontWeights.bold,
-	},
-	loadingIndicator: { marginVertical: spacing.xl },
-	centeredMessage: {
+	messageContainer: {
 		paddingVertical: spacing.xl,
 		alignItems: "center",
-		marginHorizontal: spacing.m,
+		marginHorizontal: screenPadding,
+		justifyContent: "center",
+		minHeight: 150,
 	},
 	messageText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
 		textAlign: "center",
-		marginBottom: spacing.s,
+		marginTop: spacing.s,
 	},
 	errorText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.error,
+		fontFamily: typography.primaryRegular,
+		color: colors.textError,
 		textAlign: "center",
-		marginBottom: spacing.s,
+		marginTop: spacing.s,
+		marginBottom: spacing.m,
 	},
-	noBikesText: {
+	emptyStateText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
 		textAlign: "center",
+		marginTop: spacing.s,
+	},
+	fullPageLoader: {
+		marginVertical: spacing.xxl,
+		minHeight: 200,
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	retryButton: {
+		backgroundColor: colors.buttonPrimaryBackground,
+		paddingVertical: spacing.s,
+		paddingHorizontal: spacing.l,
+		borderRadius: borderRadius.m,
+		marginTop: spacing.m,
+	},
+	retryButtonText: {
+		color: colors.buttonPrimaryText,
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryBold,
+	},
+	primaryButton: {
+		backgroundColor: colors.buttonPrimaryBackground,
+		paddingVertical: spacing.m,
+		paddingHorizontal: spacing.xl, // Matched image's wider "Reserve" button
+		borderRadius: borderRadius.l, // Matched image's "Reserve" button radius
+		alignItems: "center",
+	},
+	primaryButtonText: {
+		color: colors.buttonPrimaryText,
+		fontSize: typography.fontSizes.l, // Matched image's "Reserve" text size
+		fontFamily: typography.primaryBold, // Or typography.primarySemiBold
+		fontWeight: typography.fontWeights.bold,
 	},
 });
 

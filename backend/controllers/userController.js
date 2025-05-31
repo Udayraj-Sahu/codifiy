@@ -1,7 +1,7 @@
 // controllers/userController.js
 const User = require("../models/User");
 const { validationResult } = require("express-validator");
-const asyncHandler = require('express-async-handler');
+const asyncHandler = require("express-async-handler");
 // Update a user's role (by Owner)
 exports.updateUserRoleByOwner = async (req, res) => {
 	const errors = validationResult(req);
@@ -9,23 +9,30 @@ exports.updateUserRoleByOwner = async (req, res) => {
 		return res.status(400).json({ errors: errors.array() });
 	}
 
-	const { targetUserId } = req.params;
-	const { role: newRole } = req.body; // newRole will be 'User' or 'Admin' due to validator
-
-	// The user performing the action (the Owner) is req.user
+	const { userId } = req.params; // <<< CORRECTED: Use userId
+	const { role: newRole } = req.body;
+	console.log("--- Attempting to update role ---");
+	console.log("Received userId from req.params:", userId); // Now this will log the actual ID
+	console.log("Received newRole from req.body:", newRole);
 	const ownerId = req.user.id;
 
 	try {
-		// Prevent Owner from changing their own role via this endpoint to avoid self-lockout
-		// (especially if they are the only Owner - more complex logic for "last owner" not included here)
-		if (targetUserId === ownerId) {
+		if (!userId) {
+			// Good to add a check if userId is somehow still undefined
+			return res
+				.status(400)
+				.json({ message: "User ID parameter is missing." });
+		}
+
+		if (userId === ownerId) {
+			// Use userId consistently
 			return res.status(403).json({
 				message:
 					"Owners cannot change their own role via this endpoint.",
 			});
 		}
 
-		const userToUpdate = await User.findById(targetUserId);
+		const userToUpdate = await User.findById(userId); // Use userId consistently
 
 		if (!userToUpdate) {
 			return res
@@ -33,16 +40,9 @@ exports.updateUserRoleByOwner = async (req, res) => {
 				.json({ message: "User to update not found" });
 		}
 
-		// Additional safety: Prevent changing another Owner's role to something else
-		// if (userToUpdate.role === 'Owner' && userToUpdate.id !== ownerId) {
-		//   return res.status(403).json({ message: "Cannot change another Owner's role." });
-		// }
-		// For now, the isIn(['User', 'Admin']) validator prevents setting role to 'Owner' anyway.
-
 		userToUpdate.role = newRole;
 		await userToUpdate.save();
 
-		// Return the updated user (excluding password)
 		const userResponse = {
 			id: userToUpdate._id,
 			fullName: userToUpdate.fullName,
@@ -107,3 +107,53 @@ exports.updateUserPushToken = asyncHandler(async (req, res, next) => {
 		expoPushToken: user.expoPushToken, // Send back the saved token
 	});
 });
+
+exports.getAllUsersForOwnerByOwner = async (req, res) => {
+	// Renamed for clarity if in userController
+	// ... (Implement logic similar to the Mongoose example I provided for getAllUsersForOwner)
+	// This will involve User.find(), User.countDocuments(), pagination, filtering by role/search
+	// You'll need to decide if "owner" in this context means filtering by some ownerId or if it's an admin-like view
+	// For now, let's assume it's similar to the admin view of users but could be restricted later.
+	const page = parseInt(req.query.page) || 1;
+	const limit = parseInt(req.query.limit) || 15;
+	const skip = (page - 1) * limit;
+	const filterQuery = {};
+	if (req.query.role && req.query.role !== "all") {
+		filterQuery.role = req.query.role;
+	}
+	if (req.query.search) {
+		const searchRegex = { $regex: req.query.search, $options: "i" };
+		filterQuery.$or = [{ fullName: searchRegex }, { email: searchRegex }];
+	}
+	let sortOptions = { createdAt: -1 };
+	if (req.query.sortBy) {
+		/* ... build sortOptions ... */
+	}
+
+	try {
+		const users = await User.find(filterQuery)
+			.sort(sortOptions)
+			.skip(skip)
+			.limit(limit)
+			.select("-password")
+			.lean();
+		const totalUsers = await User.countDocuments(filterQuery);
+		res.status(200).json({
+			success: true,
+			data: users,
+			pagination: {
+				currentPage: page,
+				totalPages: Math.ceil(totalUsers / limit),
+				totalItems: totalUsers,
+				limit,
+			},
+			message: "Users fetched successfully",
+		});
+	} catch (error) {
+		console.error("Error in getAllUsersForOwnerByOwner:", error);
+		res.status(500).json({
+			success: false,
+			message: "Server error fetching users.",
+		});
+	}
+};

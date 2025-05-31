@@ -1,7 +1,8 @@
 // src/screens/App/Profile/SettingsScreen.tsx
 import { StackNavigationProp } from "@react-navigation/stack";
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+	ActivityIndicator,
 	Alert,
 	Image,
 	Linking,
@@ -13,60 +14,48 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import PrimaryButton from "../../../components/common/PrimaryButton"; // For Logout button
-import { useAuth } from "../../../context/AuthContext"; // To get user data and logout
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
+import { useDispatch, useSelector } from "react-redux"; // Import Redux hooks
+import PrimaryButton from "../../../components/common/PrimaryButton"; // Assumed to be themed
 import { ProfileStackParamList } from "../../../navigation/types";
+import { logoutUser } from "../../../store/slices/authSlice"; // Import logout action
+import { AppDispatch, RootState } from "../../../store/store"; // Import Redux types
 import { borderRadius, colors, spacing, typography } from "../../../theme";
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Example for icons
 
-// --- Placeholder for User Preferences & Profile ---
+// --- User Preferences & Profile (Data will come from Redux/State) ---
 interface UserSettings {
 	notificationsEnabled: boolean;
-	language: string;
-	locationAccessEnabled: boolean;
+	language: string; // This would ideally be managed via i18n and user preferences
+	locationAccessEnabled: boolean; // This might reflect actual system permission status
 	twoFactorAuthEnabled: boolean;
 }
-interface UserProfile {
-	// Simplified for this screen context
+interface UserProfileDisplay {
 	fullName: string;
 	email: string;
-	profileImageUrl?: string;
+	profileImageUrl?: string | null;
 }
 
-const DUMMY_SETTINGS: UserSettings = {
-	notificationsEnabled: true,
-	language: "English",
-	locationAccessEnabled: true,
-	twoFactorAuthEnabled: false,
-};
-const DUMMY_PROFILE: UserProfile = {
-	fullName: "Satoshi Nakamoto",
-	email: "satoshi@b.com",
-	profileImageUrl: "https://via.placeholder.com/60x60.png?text=SN",
-};
-// --- End Placeholder ---
-
-// --- Reusable Setting Item Component (Enhanced) ---
+// --- Reusable Setting Item Component (Enhanced for Dark Theme & MaterialIcons) ---
 interface SettingItemProps {
 	label: string;
-	iconPlaceholder?: string; // For emoji/text placeholder
+	iconName?: keyof typeof MaterialIcons.glyphMap; // Use MaterialIcons names
 	onPress?: () => void;
 	hasSwitch?: boolean;
 	switchValue?: boolean;
 	onSwitchValueChange?: (value: boolean) => void;
-	currentValue?: string; // e.g., "English" for language
+	currentValueText?: string; // e.g., "English" for language
 	isDestructive?: boolean;
-	isLastItemInSection?: boolean; // To remove bottom border if it's the last
+	isLastItemInSection?: boolean;
 }
 
 const SettingItem: React.FC<SettingItemProps> = ({
 	label,
-	iconPlaceholder,
+	iconName,
 	onPress,
 	hasSwitch,
 	switchValue,
 	onSwitchValueChange,
-	currentValue,
+	currentValueText,
 	isDestructive,
 	isLastItemInSection,
 }) => {
@@ -77,11 +66,21 @@ const SettingItem: React.FC<SettingItemProps> = ({
 				isLastItemInSection && styles.settingItemLast,
 			]}
 			onPress={onPress}
-			disabled={!onPress && !hasSwitch}
+			disabled={!onPress && !hasSwitch} // Disable if no action
 			activeOpacity={onPress ? 0.7 : 1}>
-			{iconPlaceholder && (
-				<Text style={styles.settingIcon}>{iconPlaceholder}</Text>
+			{iconName && (
+				<MaterialIcons
+					name={iconName}
+					size={22} // Standardized icon size
+					color={isDestructive ? colors.error : colors.iconDefault} // Themed icon color
+					style={styles.settingIcon}
+				/>
 			)}
+			{
+				!iconName && (
+					<View style={styles.settingIconPlaceholder} />
+				) /* For alignment if no icon */
+			}
 			<Text
 				style={[
 					styles.settingLabel,
@@ -89,29 +88,33 @@ const SettingItem: React.FC<SettingItemProps> = ({
 				]}>
 				{label}
 			</Text>
-			{currentValue && !hasSwitch && (
-				<Text style={styles.settingValueText}>{currentValue}</Text>
+			{currentValueText && !hasSwitch && (
+				<Text style={styles.settingValueText}>{currentValueText}</Text>
 			)}
 			{hasSwitch && (
 				<Switch
 					trackColor={{
-						false: colors.greyLightest || "#E0E0E0",
-						true: colors.primaryLight || "#D3EAA4",
+						false: colors.borderDefault, // Darker track for off state
+						true: colors.primaryLight, // Lighter primary for on state track
 					}}
 					thumbColor={
 						switchValue
 							? colors.primary
 							: Platform.OS === "ios"
-							? colors.white
-							: colors.greyMedium
+							? colors.backgroundCard // iOS thumb often matches background when off
+							: colors.textDisabled // Muted thumb for Android when off
 					}
-					ios_backgroundColor={colors.greyLightest}
+					ios_backgroundColor={colors.borderDefault} // Background of the track on iOS
 					onValueChange={onSwitchValueChange}
 					value={switchValue}
 				/>
 			)}
 			{!hasSwitch && onPress && (
-				<Text style={styles.settingArrow}>›</Text>
+				<MaterialIcons
+					name="chevron-right"
+					size={24}
+					color={colors.iconDefault}
+				/>
 			)}
 		</TouchableOpacity>
 	);
@@ -122,96 +125,131 @@ type SettingsScreenNavigationProp = StackNavigationProp<
 	ProfileStackParamList,
 	"Settings"
 >;
-// type SettingsScreenRouteProp = RouteProp<ProfileStackParamList, 'Settings'>; // If receiving params
 
 interface SettingsScreenProps {
 	navigation: SettingsScreenNavigationProp;
-	// route: SettingsScreenRouteProp;
 }
 
-const APP_VERSION = "1.0.0 (Build 1)"; // Get this from DeviceInfo or Expo Constants
+const APP_VERSION = "1.0.1 (Build 2)"; // Example, get from DeviceInfo or Expo Constants
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
-	const { user: authUser, signOut } = useAuth(); // Assuming useAuth provides the basic user
-	const [userProfile, setUserProfile] = useState<UserProfile>(DUMMY_PROFILE);
-	const [settings, setSettings] = useState<UserSettings>(DUMMY_SETTINGS);
-	const [isLoading, setIsLoading] = useState(false); // For fetching settings if needed
+	const dispatch = useDispatch<AppDispatch>();
+	const authUser = useSelector((state: RootState) => state.auth.user);
 
-	// Set header right icon
-	useLayoutEffect(() => {
-		navigation.setOptions({
-			headerRight: () => (
-				<TouchableOpacity
-					onPress={() => console.log("Gear icon pressed!")}
-					style={{ marginRight: spacing.m }}>
-					{/* <Icon name="cog-outline" size={24} color={colors.textPrimary} /> */}
-					<Text style={{ fontSize: 22 }}>⚙️</Text>
-				</TouchableOpacity>
-			),
-		});
-	}, [navigation]);
+	const [userProfile, setUserProfile] = useState<UserProfileDisplay | null>(
+		null
+	);
+	// Settings would ideally be fetched or come from a user preferences slice
+	const [settings, setSettings] = useState<UserSettings>({
+		notificationsEnabled: true,
+		language: "English", // Placeholder
+		locationAccessEnabled: true, // Placeholder, should reflect actual permission
+		twoFactorAuthEnabled: false, // Placeholder
+	});
+	const [isLoading, setIsLoading] = useState(false); // For any async settings operations
+
+	const profileImagePlaceholder =
+		"https://placehold.co/60x60/1A1A1A/F5F5F5?text=User";
+
+	// Removed useLayoutEffect for headerRight, assuming header is standard from stack navigator
+	// If custom headerRight is needed, it should be themed.
 
 	useEffect(() => {
-		// Fetch actual settings and profile data if not from context
 		if (authUser) {
 			setUserProfile({
-				fullName: authUser.fullName || DUMMY_PROFILE.fullName,
-				email: authUser.email,
-				profileImageUrl:
-					(authUser as any).profileImageUrl ||
-					DUMMY_PROFILE.profileImageUrl,
+				fullName: authUser.fullName || "User Name",
+				email: authUser.email || "user@example.com",
+				profileImageUrl: authUser.profileImageUrl,
 			});
+			// TODO: Fetch actual user settings if they are stored on backend/redux
+			// e.g., dispatch(fetchUserSettingsThunk());
+		} else {
+			// Handle case where user is not authenticated (should ideally not reach this screen)
+			navigation.goBack(); // Or navigate to Auth flow
 		}
-		// setSettings(fetchedSettings); // Example if fetching settings
-	}, [authUser]);
+	}, [authUser, navigation]);
 
 	const handleToggleSetting = async (
 		settingKey: keyof UserSettings,
 		value: boolean
 	) => {
 		setSettings((prev) => ({ ...prev, [settingKey]: value }));
-		// TODO: Persist setting change via API or local storage
+		// TODO: Persist setting change via API call and update Redux store
 		console.log(`Setting ${settingKey} to ${value}`);
+		// Example: dispatch(updateUserSettingThunk({ [settingKey]: value }));
 	};
 
 	const navigateTo = (
-		screenName: keyof ProfileStackParamList,
+		screenName: keyof ProfileStackParamList, // Ensure screenName is a valid key
 		params?: any
 	) => {
-		// Alert.alert("Navigate", `To ${screenName}`);
-		// @ts-ignore // Temporary to allow navigation to conceptual screens
-		navigation.navigate(screenName, params);
+		try {
+			navigation.navigate(screenName, params);
+		} catch (e) {
+			console.error("Navigation error in SettingsScreen:", e);
+			Alert.alert(
+				"Navigation Error",
+				`Could not navigate to ${screenName}.`
+			);
+		}
 	};
 
-	const openLink = (url: string) =>
-		Linking.openURL(url).catch((err) =>
-			Alert.alert("Error", "Could not open link.")
-		);
+	const openLink = async (url: string) => {
+		const supported = await Linking.canOpenURL(url);
+		if (supported) {
+			await Linking.openURL(url);
+		} else {
+			Alert.alert("Error", `Could not open this link: ${url}`);
+		}
+	};
+
+	const handleLogout = () => {
+		Alert.alert("Logout", "Are you sure you want to log out?", [
+			{ text: "Cancel", style: "cancel" },
+			{
+				text: "Logout",
+				style: "destructive",
+				onPress: () => dispatch(logoutUser()), // Dispatch Redux logout action
+			},
+		]);
+	};
 
 	const handleDeleteAccount = () => {
 		Alert.alert(
 			"Delete Account",
-			"This action is permanent. Are you sure?",
+			"This action is permanent and cannot be undone. All your data will be erased. Are you absolutely sure?",
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
-					text: "Delete",
+					text: "Delete My Account",
 					style: "destructive",
 					onPress: async () => {
-						console.log("Deleting account...");
-						// await actualDeleteAccountAPI();
-						await signOut(); // Then sign out
+						console.log("Initiating account deletion...");
+						// TODO: dispatch(deleteAccountThunk());
+						// After successful deletion from backend, the thunk should also call logoutUser.
+						// For now, just simulating logout:
+						// await dispatch(logoutUser());
+						Alert.alert(
+							"Request Submitted",
+							"Your account deletion request has been submitted. It may take some time to process."
+						);
 					},
 				},
 			]
 		);
 	};
+	if (!userProfile) {
+		return (
+			<View style={styles.centered}>
+				<ActivityIndicator size="large" color={colors.primary} />
+			</View>
+		);
+	}
 
 	return (
 		<ScrollView
 			style={styles.container}
 			contentContainerStyle={styles.contentContainer}>
-			{/* 1. Profile Section Card */}
 			<View style={styles.card}>
 				<TouchableOpacity
 					style={styles.profileCardHeader}
@@ -220,7 +258,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 						source={
 							userProfile.profileImageUrl
 								? { uri: userProfile.profileImageUrl }
-								: require("../../../../assets/images/icon.png")
+								: { uri: profileImagePlaceholder }
 						}
 						style={styles.profileCardImage}
 					/>
@@ -232,30 +270,19 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 							{userProfile.email}
 						</Text>
 					</View>
-					<Text style={styles.settingArrow}>›</Text>
+					<MaterialIcons
+						name="chevron-right"
+						size={24}
+						color={colors.iconDefault}
+					/>
 				</TouchableOpacity>
-				<View style={styles.divider} />
-				<SettingItem
-					label="Edit Profile"
-					onPress={() => navigateTo("EditProfile")}
-					iconPlaceholder="✏️"
-				/>
-				<SettingItem
-					label="Phone Number"
-					onPress={() =>
-						Alert.alert("Navigate", "To Edit Phone Number")
-					}
-					iconPlaceholder="📞"
-					isLastItemInSection
-				/>
 			</View>
 
-			{/* 2. App Preferences Section */}
 			<Text style={styles.sectionTitle}>App Preferences</Text>
 			<View style={styles.card}>
 				<SettingItem
 					label="Notifications"
-					iconPlaceholder="🔔"
+					iconName="notifications-none"
 					hasSwitch
 					switchValue={settings.notificationsEnabled}
 					onSwitchValueChange={(val) =>
@@ -264,13 +291,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 				/>
 				<SettingItem
 					label="Language"
-					iconPlaceholder="🌐"
-					currentValue={settings.language}
-					onPress={() => navigateTo("LanguageSelectionScreen")}
+					iconName="language"
+					currentValueText={settings.language}
+					onPress={() => navigateTo("LanguageSelectionScreen" as any)} // Cast if not in ProfileStackParamList
 				/>
 				<SettingItem
 					label="Location Access"
-					iconPlaceholder="📍"
+					iconName="location-pin"
 					hasSwitch
 					switchValue={settings.locationAccessEnabled}
 					onSwitchValueChange={(val) =>
@@ -280,17 +307,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 				/>
 			</View>
 
-			{/* 3. Privacy & Security Section */}
 			<Text style={styles.sectionTitle}>Privacy & Security</Text>
 			<View style={styles.card}>
 				<SettingItem
 					label="Change Password"
-					iconPlaceholder="🔒"
-					onPress={() => navigateTo("ChangePasswordScreen")}
+					iconName="lock-outline" // More appropriate for password
+					onPress={() => navigateTo("ChangePasswordScreen" as any)}
 				/>
 				<SettingItem
 					label="Two-Factor Authentication"
-					iconPlaceholder="🛡️" // Using shield for 2FA
+					iconName="security" // Using shield for 2FA
 					hasSwitch
 					switchValue={settings.twoFactorAuthEnabled}
 					onSwitchValueChange={(val) =>
@@ -299,52 +325,56 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 				/>
 				<SettingItem
 					label="Data Privacy Settings"
-					iconPlaceholder="📄"
-					onPress={() => navigateTo("DataPrivacyScreen")}
+					iconName="shield-account-outline" // Example from MaterialCommunity, use 'privacy-tip' from MaterialIcons
+					onPress={() => navigateTo("DataPrivacyScreen" as any)}
 					isLastItemInSection
 				/>
 			</View>
 
-			{/* 4. Support & Help Section */}
 			<Text style={styles.sectionTitle}>Support & Help</Text>
 			<View style={styles.card}>
 				<SettingItem
 					label="FAQ"
-					iconPlaceholder="❓"
-					onPress={() => navigateTo("FAQScreen")}
+					iconName="help-outline"
+					onPress={() => navigateTo("FAQScreen" as any)}
 				/>
 				<SettingItem
 					label="Contact Support"
-					iconPlaceholder="💬"
-					onPress={() => navigateTo("ContactSupportScreen")}
+					iconName="support-agent"
+					onPress={() => navigateTo("ContactSupportScreen" as any)}
 				/>
 				<SettingItem
 					label="Terms & Conditions"
-					iconPlaceholder="📜"
-					onPress={() => openLink("https_bikya_app_terms")}
+					iconName="article"
+					onPress={() => openLink("https://your-app.com/terms")}
 				/>
 				<SettingItem
 					label="Privacy Policy"
-					iconPlaceholder=" Gavel"
-					onPress={() => openLink("https_bikya_app_privacy")}
+					iconName="gavel"
+					onPress={() => openLink("https://your-app.com/privacy")}
 				/>
 				<SettingItem
 					label="App Version"
-					iconPlaceholder="📱"
-					valueText={APP_VERSION}
+					iconName="info-outline"
+					currentValueText={APP_VERSION}
 					isLastItemInSection
 				/>
 			</View>
 
-			{/* 5. Account Management */}
 			<View style={styles.accountManagementSection}>
-				<PrimaryButton
+				<PrimaryButton // Assumed themed
 					title="Logout"
-					onPress={signOut} // Directly use signOut from useAuth
+					onPress={handleLogout}
 					style={styles.logoutButton}
 					textStyle={styles.logoutButtonText}
-					// iconLeft={<Icon name="logout" size={18} color={colors.error} />} // Example for actual icon
-					fullWidth={true} // Ensure it takes full width of its container
+					iconLeft={
+						<MaterialIcons
+							name="logout"
+							size={20}
+							color={colors.error}
+						/>
+					}
+					fullWidth={true}
 				/>
 				<TouchableOpacity
 					onPress={handleDeleteAccount}
@@ -359,36 +389,37 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC", // Off-white
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	contentContainer: {
 		paddingVertical: spacing.s,
 		paddingBottom: spacing.xxl,
 	},
-	centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+	centered: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		backgroundColor: colors.backgroundMain,
+	},
 	sectionTitle: {
-		marginHorizontal: spacing.m + spacing.xs, // Align with card content padding
+		marginHorizontal: spacing.m + spacing.xs,
 		marginTop: spacing.l,
 		marginBottom: spacing.s,
 		fontSize: typography.fontSizes.s,
-		fontWeight: typography.fontWeights.medium,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryMedium, // Use themed font family
+		color: colors.textSecondary, // Muted text for section titles
 		textTransform: "uppercase",
+		letterSpacing: 0.5,
 	},
 	card: {
-		backgroundColor: colors.white,
-		borderRadius: borderRadius.m,
+		backgroundColor: colors.backgroundCard, // Dark card background
+		borderRadius: borderRadius.l, // More rounded cards
 		marginHorizontal: spacing.m,
-		marginBottom: spacing.m,
-		overflow: "hidden", // Ensures border radius clips children if needed
-		// Soft shadow
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 2,
-		elevation: 2,
+		marginBottom: spacing.l, // Increased space between cards
+		overflow: "hidden",
+		borderWidth: 1, // Optional: subtle border for cards
+		borderColor: colors.borderDefault, // Optional: subtle border for cards
 	},
-	// Profile Section Card specific styles
 	profileCardHeader: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -397,76 +428,89 @@ const styles = StyleSheet.create({
 	profileCardImage: {
 		width: 60,
 		height: 60,
-		borderRadius: 30,
+		borderRadius: borderRadius.circle, // Circular image
 		marginRight: spacing.m,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.borderDefault, // Placeholder background
 	},
 	profileCardTextContainer: {
 		flex: 1,
 	},
 	profileCardName: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary, // Light text
 	},
 	profileCardEmail: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
 	},
 	divider: {
-		height: StyleSheet.hairlineWidth,
-		backgroundColor: colors.borderDefault || "#E0E0E0",
-		marginHorizontal: spacing.m, // If SettingItems also have this padding
+		// No longer used as items have top borders
+		// height: StyleSheet.hairlineWidth,
+		// backgroundColor: colors.borderDefault,
+		// marginHorizontal: spacing.m,
 	},
-	// SettingItem Styles (reused from previous definition, adapted)
 	settingItem: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingVertical: spacing.l - 2, // Adjusted for card layout
+		paddingVertical: spacing.m + spacing.xxs, // Slightly more padding
 		paddingHorizontal: spacing.m,
-		backgroundColor: colors.white,
-		borderTopWidth: StyleSheet.hairlineWidth, // Use top border for items after the first
-		borderTopColor: colors.borderDefault || "#F0F0F0",
+		backgroundColor: colors.backgroundCard, // Card background for items
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderTopColor: colors.borderDefault, // Themed border
+	},
+	settingItemFirst: {
+		// Apply this to the first item in a card if no header like profileCardHeader
+		borderTopWidth: 0,
 	},
 	settingItemLast: {
-		borderBottomWidth: 0, // Remove border for the last item in a card section
+		// No bottom border needed if card has overflow:hidden and items have top borders
 	},
 	settingIcon: {
-		fontSize: 20,
 		marginRight: spacing.m,
-		color: colors.textMedium,
-		width: 24,
+		width: 24, // Ensure consistent width for icon area
 		textAlign: "center",
+		// Color is passed as prop or defaults
+	},
+	settingIconPlaceholder: {
+		// For alignment when no icon is present
+		width: 24,
+		marginRight: spacing.m,
 	},
 	settingLabel: {
 		flex: 1,
 		fontSize: typography.fontSizes.m,
-		color: colors.textPrimary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textPrimary, // Light text
 	},
 	settingValueText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text for current value
 		marginRight: spacing.s,
 	},
-	settingArrow: {
-		fontSize: typography.fontSizes.l + 2,
-		color: colors.greyLight,
+	// settingArrow: { // Replaced by MaterialIcons chevron-right
+	//  fontSize: typography.fontSizes.l + 2,
+	//  color: colors.iconDefault,
+	// },
+	destructiveText: {
+		color: colors.error, // Themed error color for destructive actions
 	},
-	destructiveText: { color: colors.error || "red" },
-	// Account Management Section
 	accountManagementSection: {
 		paddingHorizontal: spacing.m,
-		marginTop: spacing.l, // Space above logout
+		marginTop: spacing.l,
 	},
 	logoutButton: {
-		backgroundColor: "transparent", // Outlined style
-		borderColor: colors.error || "red",
+		// Style for PrimaryButton instance
+		backgroundColor: "transparent",
+		borderColor: colors.error, // Error color border for logout
 		borderWidth: 1.5,
-		paddingVertical: spacing.m - 2, // Adjust padding for outlined
 	},
 	logoutButtonText: {
-		color: colors.error || "red",
-		fontWeight: typography.fontWeights.semiBold,
+		// For text within PrimaryButton instance
+		color: colors.error, // Error color text for logout
+		fontFamily: typography.primarySemiBold,
 	},
 	deleteAccountButton: {
 		marginTop: spacing.m,
@@ -474,8 +518,9 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	deleteAccountText: {
-		color: colors.textMedium, // Muted grey
+		color: colors.textPlaceholder, // Very muted for less prominent action
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 	},
 });
 

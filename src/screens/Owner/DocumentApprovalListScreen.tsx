@@ -11,49 +11,46 @@ import {
 	ActivityIndicator,
 	Alert,
 	FlatList,
+	RefreshControl, // Added for pull-to-refresh
 	ScrollView,
+	// ScrollView, // ScrollView for filter tabs is still used
 	StyleSheet,
 	Text,
 	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { useDispatch, useSelector } from "react-redux"; // <<< ADDED
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
+import { useDispatch, useSelector } from "react-redux";
 import {
 	DocumentStatusOwner,
 	OwnerStackParamList,
 } from "../../navigation/types";
 import {
-	fetchDocumentsForReviewThunk, // Use the Document type from your slice
+	fetchDocumentsForReviewThunk,
 	FetchDocumentsParamsAdminOwner,
+	Document as StoreDocument,
 	updateDocumentStatusThunk,
-} from "../../store/slices/documentSlice"; // <<< ADDED
-import { AppDispatch, RootState } from "../../store/store"; // <<< ADDED
+} from "../../store/slices/documentSlice";
+import { AppDispatch, RootState } from "../../store/store";
 import { borderRadius, colors, spacing, typography } from "../../theme";
 
 // --- Types ---
-// DocumentForApproval can now be mapped from StoreDocument
 interface DocumentForApprovalItem {
-	// Renamed to avoid conflict if needed
-	id: string; // maps to _id
+	id: string;
 	userId: string;
 	userName: string;
 	userEmail: string;
-	documentType: string; // Was more specific before, now from StoreDocument
-	docIconPlaceholder: string; // You might need to derive this based on documentType
+	documentType: string;
+	docIconName: keyof typeof MaterialIcons.glyphMap; // For MaterialIcons
 	submittedDate: string;
 	status: Exclude<DocumentStatusOwner, "all">;
-	documentImageUrl?: string; // For navigation to viewer
+	documentImageUrl?: string;
 }
 
-// --- DUMMY DATA REMOVED ---
-// const DUMMY_DOCUMENTS_FOR_APPROVAL: DocumentForApproval[] = [ ... ];
-// const fetchDocumentsForApprovalAPI = async ( ... ): Promise<DocumentForApproval[]> => { ... };
-// const updateDocumentStatusAPI_Owner = async ( ... ): Promise<{ success: boolean }> => { ... };
-
-// --- Reusable Components (FilterPillButton, OwnerDocumentCard - ensure props match DocumentForApprovalItem) ---
+// --- Reusable Components (Themed) ---
 interface FilterPillButtonProps {
-	/* ... */ label: string;
+	label: string;
 	isActive: boolean;
 	onPress: () => void;
 }
@@ -77,7 +74,7 @@ const FilterPillButton: React.FC<FilterPillButtonProps> = ({
 );
 
 interface OwnerDocumentCardProps {
-	item: DocumentForApprovalItem; // Use the mapped type
+	item: DocumentForApprovalItem;
 	onView: () => void;
 	onApprove: () => void;
 	onReject: () => void;
@@ -88,28 +85,39 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 	onApprove,
 	onReject,
 }) => {
-	// ... (Card JSX remains similar, ensure it uses fields from DocumentForApprovalItem) ...
-	// For status styles, make sure item.status matches the keys in statusStyles
-	const statusStyles: Record<
+	const statusStylesConfig: Record<
 		Exclude<DocumentStatusOwner, "all">,
-		{ badge: object; text: object }
+		{
+			badge: object;
+			text: object;
+			iconName: keyof typeof MaterialIcons.glyphMap;
+			iconColor: string;
+		}
 	> = {
 		approved: {
 			badge: styles.statusBadgeApproved,
 			text: styles.statusTextApproved,
+			iconName: "check-circle",
+			iconColor: colors.success,
 		},
 		pending: {
 			badge: styles.statusBadgePending,
 			text: styles.statusTextPending,
+			iconName: "hourglass-empty",
+			iconColor: colors.warning,
 		},
 		rejected: {
 			badge: styles.statusBadgeRejected,
 			text: styles.statusTextRejected,
+			iconName: "cancel",
+			iconColor: colors.error,
 		},
 	};
-	const currentStatusStyle = statusStyles[item.status] || {
+	const currentStatusStyle = statusStylesConfig[item.status] || {
 		badge: {},
 		text: {},
+		iconName: "help-outline",
+		iconColor: colors.textSecondary,
 	};
 
 	return (
@@ -124,6 +132,12 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 					</Text>
 				</View>
 				<View style={[styles.statusBadge, currentStatusStyle.badge]}>
+					<MaterialIcons
+						name={currentStatusStyle.iconName}
+						size={12}
+						color={currentStatusStyle.iconColor}
+						style={{ marginRight: spacing.xs }}
+					/>
 					<Text
 						style={[
 							styles.statusBadgeText,
@@ -135,19 +149,32 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 				</View>
 			</View>
 			<View style={styles.documentTypeRow}>
-				<Text style={styles.documentTypeIcon}>
-					{item.docIconPlaceholder}
-				</Text>
+				<MaterialIcons
+					name={item.docIconName}
+					size={20}
+					color={colors.iconDefault}
+					style={styles.documentTypeIconThemed}
+				/>
 				<Text style={styles.documentTypeText}>{item.documentType}</Text>
 			</View>
 			<View style={styles.timestampRow}>
-				<Text style={styles.timestampIcon}>🕒</Text>
+				<MaterialIcons
+					name="schedule"
+					size={16}
+					color={colors.iconDefault}
+					style={styles.timestampIconThemed}
+				/>
 				<Text style={styles.timestampText}>{item.submittedDate}</Text>
 			</View>
 			<View style={styles.cardActions}>
 				<TouchableOpacity style={styles.viewButton} onPress={onView}>
-					<Text style={styles.viewButtonText}>View Document</Text>
-					<Text style={styles.viewButtonArrow}> ›</Text>
+					<MaterialIcons
+						name="visibility"
+						size={16}
+						color={colors.buttonPrimaryText}
+						style={{ marginRight: spacing.xs }}
+					/>
+					<Text style={styles.viewButtonText}>View</Text>
 				</TouchableOpacity>
 				{item.status === "pending" && (
 					<View style={styles.approvalActions}>
@@ -157,6 +184,12 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 								styles.rejectButton,
 							]}
 							onPress={onReject}>
+							<MaterialIcons
+								name="thumb-down-alt"
+								size={16}
+								color={colors.error}
+								style={{ marginRight: spacing.xs }}
+							/>
 							<Text
 								style={[
 									styles.actionButtonTextBase,
@@ -171,6 +204,12 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 								styles.approveButton,
 							]}
 							onPress={onApprove}>
+							<MaterialIcons
+								name="thumb-up-alt"
+								size={16}
+								color={colors.success}
+								style={{ marginRight: spacing.xs }}
+							/>
 							<Text
 								style={[
 									styles.actionButtonTextBase,
@@ -185,7 +224,6 @@ const OwnerDocumentCard: React.FC<OwnerDocumentCardProps> = ({
 		</View>
 	);
 };
-// --- End Reusable ---
 
 type ScreenNavigationProp = StackNavigationProp<
 	OwnerStackParamList,
@@ -207,8 +245,8 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 }) => {
 	const dispatch = useDispatch<AppDispatch>();
 	const {
-		reviewDocuments, // This will hold the documents fetched for review
-		isLoadingReviewDocs: isLoading, // Use this for loading state
+		reviewDocuments,
+		isLoadingReviewDocs: isLoading,
 		pagination,
 		errorReviewDocs: error,
 	} = useSelector((state: RootState) => state.documents);
@@ -218,10 +256,10 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 		useState<DocumentStatusOwner>(initialFilterFromRoute);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [showSearchInput, setShowSearchInput] = useState(false);
-	const [currentPage, setCurrentPage] = useState(1);
+	const [currentPage, setCurrentPage] = useState(1); // Local page state for fetching
 
 	const loadDocuments = useCallback(
-		(page = 1) => {
+		(page = 1, isRefreshing = false) => {
 			const params: FetchDocumentsParamsAdminOwner = {
 				status:
 					activeStatusFilter === "all"
@@ -229,17 +267,20 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 						: activeStatusFilter,
 				search: searchQuery.trim() || undefined,
 				page,
-				limit: 10, // Or your desired limit
+				limit: 10,
 			};
+			// Prevent re-fetch if already loading the same page unless it's a refresh
+			if (!isRefreshing && isLoading && pagination?.currentPage === page)
+				return;
 			dispatch(fetchDocumentsForReviewThunk(params));
 		},
-		[dispatch, activeStatusFilter, searchQuery]
+		[dispatch, activeStatusFilter, searchQuery, isLoading, pagination]
 	);
 
 	useEffect(() => {
-		setCurrentPage(1); // Reset to first page on filter change
-		loadDocuments(1);
-	}, [activeStatusFilter, searchQuery, loadDocuments]); // loadDocuments dependency can be removed if params are directly used
+		setCurrentPage(1);
+		loadDocuments(1, true); // Force refresh on filter/search change
+	}, [activeStatusFilter, searchQuery]); // Removed loadDocuments from deps here
 
 	const handleLoadMore = () => {
 		if (pagination && currentPage < pagination.totalPages && !isLoading) {
@@ -261,19 +302,21 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 				<TouchableOpacity
 					onPress={() => setShowSearchInput((prev) => !prev)}
 					style={{ marginRight: spacing.m }}>
-					<Text style={{ fontSize: 22, color: colors.textPrimary }}>
-						{showSearchInput ? "✕" : "🔍"}
-					</Text>
+					<MaterialIcons
+						name={showSearchInput ? "close" : "search"}
+						size={24}
+						color={colors.iconWhite}
+					/>
 				</TouchableOpacity>
 			),
 		});
-	}, [navigation, activeStatusFilter, showSearchInput]);
+	}, [navigation, activeStatusFilter, showSearchInput, colors.iconWhite]); // Added colors.iconWhite to deps
 
 	const handleViewDocument = useCallback(
 		(item: DocumentForApprovalItem) => {
 			navigation.navigate("OwnerDocumentViewerScreen", {
-				documentId: item.id, // Pass the actual document ID (_id from MongoDB)
-				documentImageUrl: item.documentImageUrl, // This might be item.fileUrl from StoreDocument
+				documentId: item.id,
+				documentImageUrl: item.documentImageUrl,
 				userName: item.userName,
 				documentType: item.documentType,
 				status: item.status,
@@ -286,25 +329,26 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 		async (docId: string, newStatus: "approved" | "rejected") => {
 			let reasonInput = "";
 			if (newStatus === "rejected") {
-				// Simple prompt for reason, replace with a proper input modal in a real app
 				const reason = await new Promise<string | undefined>(
 					(resolve) => {
 						Alert.prompt(
 							"Rejection Reason",
 							"Please provide a reason for rejection (optional):",
 							(text) => resolve(text),
-							"plain-text"
+							"plain-text",
+							"", // Default value for input
+							Platform.OS === "ios" ? undefined : "default" // Keyboard type for Android
 						);
 					}
 				);
-				reasonInput = reason || "";
+				reasonInput = reason || "No reason provided."; // Default reason if none entered
 			}
 
 			Alert.alert(
 				`Confirm ${
 					newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
 				}`,
-				`Are you sure you want to ${newStatus} this document? ${
+				`Are you sure you want to ${newStatus} this document?${
 					newStatus === "rejected" && reasonInput
 						? "\nReason: " + reasonInput
 						: ""
@@ -332,9 +376,8 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 									"Success",
 									`Document status updated to ${newStatus}.`
 								);
-								// The list will refresh because updateDocumentStatusThunk dispatches fetchDocumentsForReviewThunk
-								// Or you can explicitly call loadDocuments(1) here if that's preferred.
-								setCurrentPage(1); // Go back to first page after status update
+								setCurrentPage(1); // Reset to first page
+								loadDocuments(1, true); // Refresh the list
 							} catch (updateError: any) {
 								Alert.alert(
 									"Error",
@@ -347,14 +390,22 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 				]
 			);
 		},
-		[dispatch, activeStatusFilter, searchQuery]
-	); // Removed loadDocuments from deps as thunk handles refresh
+		[dispatch, loadDocuments]
+	); // loadDocuments is stable due to its own useCallback deps
 
-	// Map StoreDocument from Redux to DocumentForApprovalItem for the card
+	const getDocIconName = (
+		docType: string
+	): keyof typeof MaterialIcons.glyphMap => {
+		if (docType.toLowerCase().includes("license")) return "credit-card";
+		if (docType.toLowerCase().includes("id_card")) return "badge"; // Example for ID Card
+		if (docType.toLowerCase().includes("passport")) return "book"; // Example for Passport
+		return "article"; // Default document icon
+	};
+
 	const mappedDocuments: DocumentForApprovalItem[] = reviewDocuments.map(
-		(doc) => ({
+		(doc: StoreDocument): DocumentForApprovalItem => ({
 			id: doc._id,
-			userId: typeof doc.user === "string" ? doc.user : doc.user._id, // Handle populated vs. non-populated user
+			userId: typeof doc.user === "string" ? doc.user : doc.user._id,
 			userName:
 				typeof doc.user === "string"
 					? "N/A"
@@ -366,16 +417,15 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 				.split(" ")
 				.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 				.join(" "),
-			docIconPlaceholder:
-				doc.documentType === "drivers_license"
-					? "💳"
-					: doc.documentType === "id_card"
-					? "📄"
-					: "🛂",
+			docIconName: getDocIconName(doc.documentType),
 			submittedDate: new Date(
 				doc.uploadedAt || doc.createdAt
-			).toLocaleDateString(),
-			status: doc.status as Exclude<DocumentStatusOwner, "all">,
+			).toLocaleDateString("en-GB", {
+				day: "2-digit",
+				month: "short",
+				year: "numeric",
+			}),
+			status: doc.status as Exclude<DocumentStatusOwner, "all">, // Assuming status from backend matches
 			documentImageUrl: doc.fileUrl,
 		})
 	);
@@ -404,9 +454,7 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 		return (
 			<View style={styles.centered}>
 				<ActivityIndicator size="large" color={colors.primary} />
-				<Text style={{ marginTop: spacing.s }}>
-					Loading documents...
-				</Text>
+				<Text style={styles.loadingText}>Loading documents...</Text>
 			</View>
 		);
 	}
@@ -417,14 +465,16 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 				<View style={styles.searchBarContainer}>
 					<TextInput
 						style={styles.searchInput}
-						placeholder="Search by user name or email..."
+						placeholder="Search by user name, email, or doc type..."
 						value={searchQuery}
 						onChangeText={(text) => {
-							setSearchQuery(text);
-							setCurrentPage(1); /* Trigger fetch in useEffect */
+							setSearchQuery(
+								text
+							); /* Debounced search in useEffect */
 						}}
 						placeholderTextColor={colors.textPlaceholder}
 						autoFocus
+						returnKeyType="search"
 					/>
 				</View>
 			)}
@@ -443,25 +493,39 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 							isActive={activeStatusFilter === tabStatus}
 							onPress={() => {
 								setActiveStatusFilter(tabStatus);
-								setCurrentPage(
-									1
-								); /* Trigger fetch in useEffect */
 							}}
 						/>
 					))}
 				</ScrollView>
 			</View>
 
-			{error && (
-				<View style={styles.centered}>
-					<Text style={styles.errorText}>{error}</Text>
-				</View>
-			)}
+			{error &&
+				!isLoading &&
+				mappedDocuments.length === 0 && ( // Show general error if list is empty
+					<View style={styles.centered}>
+						<MaterialIcons
+							name="error-outline"
+							size={48}
+							color={colors.error}
+						/>
+						<Text style={styles.errorText}>{error}</Text>
+						<PrimaryButton
+							title="Retry"
+							onPress={() => loadDocuments(1, true)}
+						/>
+					</View>
+				)}
 
 			{!isLoading && mappedDocuments.length === 0 && !error ? (
 				<View style={styles.centered}>
+					<MaterialIcons
+						name="find-in-page"
+						size={48}
+						color={colors.textDisabled}
+					/>
 					<Text style={styles.noResultsText}>
-						No documents found for "{activeStatusFilter}" status.
+						No documents found for "{activeStatusFilter}" status{" "}
+						{searchQuery ? `matching "${searchQuery}"` : ""}.
 					</Text>
 				</View>
 			) : (
@@ -471,11 +535,14 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 					keyExtractor={(item) => item.id}
 					contentContainerStyle={styles.listContentContainer}
 					showsVerticalScrollIndicator={false}
-					onRefresh={() => {
-						setCurrentPage(1);
-						loadDocuments(1);
-					}}
-					refreshing={isLoading && currentPage === 1}
+					refreshControl={
+						<RefreshControl
+							refreshing={isLoading && currentPage === 1}
+							onRefresh={() => loadDocuments(1, true)}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
+					}
 					onEndReached={handleLoadMore}
 					onEndReachedThreshold={0.5}
 					ListFooterComponent={
@@ -493,130 +560,148 @@ const DocumentApprovalListScreen: React.FC<DocumentApprovalListScreenProps> = ({
 	);
 };
 
-// Styles (ensure these are defined as per your project)
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	centered: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.l,
+		backgroundColor: colors.backgroundMain, // Dark theme background for centered content
+	},
+	loadingText: {
+		// Added for loading text
+		marginTop: spacing.s,
+		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
 	},
 	errorText: {
-		color: colors.error,
+		color: colors.textError, // Themed error color
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		textAlign: "center",
+		marginBottom: spacing.m,
 	},
 	searchBarContainer: {
 		paddingHorizontal: spacing.m,
 		paddingTop: spacing.s,
 		paddingBottom: spacing.m,
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background for search
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
 	searchInput: {
-		backgroundColor: colors.backgroundLight || "#F0F3F7",
+		backgroundColor: colors.backgroundInput, // Specific input background
 		borderRadius: borderRadius.m,
 		paddingHorizontal: spacing.m,
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		height: 44,
-		color: colors.textPrimary,
+		color: colors.textPrimary, // Light text for input
 	},
 	filterTabsContainer: {
-		paddingHorizontal: spacing.m,
+		paddingLeft: spacing.m, // Only left padding for scroll start
 		paddingVertical: spacing.m,
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background for filters
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
-	filterTabsScroll: {},
+	filterTabsScroll: {
+		paddingRight: spacing.m, // Ensure last pill has padding
+	},
 	filterPill: {
-		paddingVertical: spacing.s - 2,
+		paddingVertical: spacing.s,
 		paddingHorizontal: spacing.l,
 		borderRadius: borderRadius.pill,
 		marginRight: spacing.s,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.backgroundInput, // Darker unselected pill
 		borderWidth: 1,
 		borderColor: colors.borderDefault,
 	},
 	filterPillActive: {
-		backgroundColor: colors.primaryLight,
+		backgroundColor: colors.primary, // Primary color for active pill
 		borderColor: colors.primary,
 	},
 	filterPillText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+		color: colors.textSecondary, // Muted text for inactive
 	},
 	filterPillTextActive: {
-		color: colors.primaryDark || colors.primary,
-		fontWeight: typography.fontWeights.bold,
+		color: colors.buttonPrimaryText, // Contrasting text for active pill
+		fontFamily: typography.primaryBold,
 	},
-	listContentContainer: { padding: spacing.m },
+	listContentContainer: {
+		padding: spacing.m,
+		flexGrow: 1, // Allow empty component to center
+	},
 	noResultsText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted text
 		textAlign: "center",
+		marginTop: spacing.xl,
 	},
 	documentCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background
 		borderRadius: borderRadius.l,
 		padding: spacing.m,
 		marginBottom: spacing.m,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.07,
-		shadowRadius: 3,
-		elevation: 2,
+		borderWidth: 1,
+		borderColor: colors.borderDefault, // Subtle border
 	},
 	cardHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		alignItems: "flex-start",
+		alignItems: "flex-start", // Align status badge properly if text wraps
 		marginBottom: spacing.s,
 	},
 	userInfo: { flex: 1, marginRight: spacing.s },
 	userNameText: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary, // Light text
 	},
 	userEmailText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
 	},
 	statusBadge: {
 		paddingHorizontal: spacing.s,
-		paddingVertical: spacing.xxs + 1,
-		borderRadius: borderRadius.s,
-		alignSelf: "flex-start",
+		paddingVertical: spacing.xs, // Adjusted padding
+		borderRadius: borderRadius.m, // More rounded
+		flexDirection: "row",
+		alignItems: "center",
 	},
 	statusBadgeText: {
+		// Base text style for all badges
 		fontSize: typography.fontSizes.xs,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
+		textTransform: "capitalize",
 	},
-	statusBadgeApproved: { backgroundColor: colors.successLight || "#D4EFDF" },
-	statusTextApproved: { color: colors.successDark || "#1D8348" },
-	statusBadgePending: { backgroundColor: colors.warningLight || "#FDEBD0" },
-	statusTextPending: { color: colors.warningDark || "#A0522D" },
-	statusBadgeRejected: { backgroundColor: colors.errorLight || "#FFD6D6" },
-	statusTextRejected: { color: colors.errorDark || "#A93226" },
+	statusBadgeApproved: { backgroundColor: colors.successMuted }, // Muted background
+	statusTextApproved: { color: colors.success }, // Bright text
+	statusBadgePending: { backgroundColor: colors.warningMuted },
+	statusTextPending: { color: colors.warning },
+	statusBadgeRejected: { backgroundColor: colors.errorMuted },
+	statusTextRejected: { color: colors.error },
 	documentTypeRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		marginVertical: spacing.s,
 	},
-	documentTypeIcon: {
-		fontSize: 18,
-		color: colors.textMedium,
+	documentTypeIconThemed: {
+		// For MaterialIcons
 		marginRight: spacing.s,
 	},
+	// documentTypeIcon removed, using MaterialIcons now
 	documentTypeText: {
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		color: colors.textPrimary,
 	},
 	timestampRow: {
@@ -624,18 +709,19 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		marginBottom: spacing.m,
 	},
-	timestampIcon: {
-		fontSize: 14,
-		color: colors.textMedium,
+	timestampIconThemed: {
+		// For MaterialIcons
 		marginRight: spacing.s,
 	},
+	// timestampIcon removed, using MaterialIcons now
 	timestampText: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 	},
 	cardActions: {
 		borderTopWidth: StyleSheet.hairlineWidth,
-		borderTopColor: colors.borderDefault || "#F0F0F0",
+		borderTopColor: colors.borderDefault,
 		paddingTop: spacing.m,
 		marginTop: spacing.s,
 		flexDirection: "row",
@@ -643,46 +729,47 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 	},
 	viewButton: {
+		// For TouchableOpacity acting as primary-like button
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: colors.primary,
+		backgroundColor: colors.primary, // Primary button color
 		paddingVertical: spacing.s,
 		paddingHorizontal: spacing.m,
 		borderRadius: borderRadius.m,
 	},
 	viewButtonText: {
-		color: colors.white,
+		color: colors.buttonPrimaryText, // Text on primary button
 		fontSize: typography.fontSizes.s,
-		fontWeight: typography.fontWeights.semiBold,
+		fontFamily: typography.primarySemiBold,
 	},
-	viewButtonArrow: {
-		color: colors.white,
-		fontSize: typography.fontSizes.m,
-		marginLeft: spacing.xs,
-		fontWeight: "bold",
+	// viewButtonArrow removed, using MaterialIcons now
+	approvalActions: {
+		flexDirection: "row",
 	},
-	approvalActions: { flexDirection: "row" },
 	actionButtonBase: {
+		// Base for Approve/Reject TouchableOpacity
 		borderRadius: borderRadius.m,
 		paddingVertical: spacing.s - 1,
 		paddingHorizontal: spacing.m,
 		marginLeft: spacing.s,
 		borderWidth: 1.5,
+		flexDirection: "row",
+		alignItems: "center",
 	},
 	actionButtonTextBase: {
-		fontWeight: typography.fontWeights.semiBold,
+		fontFamily: typography.primarySemiBold,
 		fontSize: typography.fontSizes.s,
 	},
 	approveButton: {
-		backgroundColor: colors.successLight,
-		borderColor: colors.successDark,
+		backgroundColor: colors.backgroundCard, // Outline style
+		borderColor: colors.success,
 	},
-	approveButtonText: { color: colors.successDark },
+	approveButtonText: { color: colors.success },
 	rejectButton: {
-		backgroundColor: colors.errorLight,
-		borderColor: colors.errorDark,
+		backgroundColor: colors.backgroundCard, // Outline style
+		borderColor: colors.error,
 	},
-	rejectButtonText: { color: colors.errorDark },
+	rejectButtonText: { color: colors.error },
 });
 
 export default DocumentApprovalListScreen;

@@ -1,8 +1,9 @@
 // src/screens/App/Booking/ApplyPromoCodeScreen.tsx
 import { RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import React, { useState } from "react";
+import React, { useState } from "react"; // Added useEffect
 import {
+	ActivityIndicator,
 	FlatList,
 	ScrollView,
 	StyleSheet,
@@ -10,12 +11,13 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import PromoCard from "../../../components/common/PromoCard";
-import StyledTextInput from "../../../components/common/StyledTextInput";
-import { ExploreStackParamList } from "../../../navigation/types"; // Assuming it's part of ExploreStack
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
+import PromoCard from "../../../components/common/PromoCard"; // Assumed to be theme-aware
+import StyledTextInput from "../../../components/common/StyledTextInput"; // Assumed to be theme-aware
+import { ExploreStackParamList } from "../../../navigation/types";
 import { borderRadius, colors, spacing, typography } from "../../../theme";
 
-// --- Dummy Promo Data (replace with actual API data later) ---
+// --- Dummy Promo Data ---
 interface PromoOffer {
 	id: string;
 	promoCode: string;
@@ -64,124 +66,160 @@ const ApplyPromoCodeScreen: React.FC<ApplyPromoCodeScreenProps> = ({
 	route,
 	navigation,
 }) => {
-	// const { currentBookingId, subtotal } = route.params || {}; // Params from BookingScreen
 	const [manualPromoCode, setManualPromoCode] = useState("");
 	const [availablePromos, setAvailablePromos] =
 		useState<PromoOffer[]>(DUMMY_PROMOS);
 	const [appliedPromo, setAppliedPromo] = useState<PromoOffer | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null); // For manual apply errors
 	const [loading, setLoading] = useState(false);
 
-	// In a real app, you might fetch available promos based on user/booking context
-	// useEffect(() => {
-	//   fetchAvailablePromos(currentBookingId, subtotal).then(setAvailablePromos);
-	// }, [currentBookingId, subtotal]);
+	// Example: If onApplyPromo callback is passed from BookingScreen
+	const onApplyPromoCallback = route.params?.onApplyPromo;
 
 	const handleApplyManualCode = () => {
 		if (!manualPromoCode.trim()) return;
 		setLoading(true);
-		// TODO: Validate manualPromoCode via API
-		// For now, simulate: check if it exists in our dummy list
-		const foundPromo = DUMMY_PROMOS.find(
-			(p) =>
-				p.promoCode.toUpperCase() ===
-				manualPromoCode.trim().toUpperCase()
-		);
+		setSuccessMessage(null);
+		setErrorMessage(null);
+
+		// Simulate API call
 		setTimeout(() => {
+			const foundPromo = DUMMY_PROMOS.find(
+				(p) =>
+					p.promoCode.toUpperCase() ===
+					manualPromoCode.trim().toUpperCase()
+			);
 			if (foundPromo) {
 				applyPromo(foundPromo);
 			} else {
-				// Alert.alert("Invalid Code", "The promo code entered is not valid.");
-				console.warn("Invalid Code: ", manualPromoCode);
-				setSuccessMessage(null); // Clear any previous success message
+				setErrorMessage(
+					`Invalid Code: "${manualPromoCode.trim()}" is not a valid promo code.`
+				);
+				setAppliedPromo(null); // Clear any previously applied promo
 			}
 			setLoading(false);
-		}, 500);
+		}, 700);
 	};
 
 	const applyPromo = (promo: PromoOffer) => {
 		setAppliedPromo(promo);
 		setSuccessMessage(`Promo "${promo.promoCode}" Applied Successfully!`);
-		setManualPromoCode(""); // Clear input
+		setErrorMessage(null); // Clear any previous error
+		setManualPromoCode("");
 
-		// TODO: Navigate back to BookingScreen and pass the applied promo details
-		// This is often done by updating a shared state (Redux/Context) or by
-		// using navigation.navigate with params to update the previous screen if possible,
-		// or a callback function passed via route params.
-		// For simplicity here, we'll assume BookingScreen refetches or uses context.
-		// Or, if BookingScreen can listen to focus events, it can refresh.
-		// A common pattern is `navigation.navigate('Booking', { appliedPromoCode: promo.promoCode, discount: ... });`
-		// This will update params of Booking screen if it's already in stack, then goBack could be called.
-		// OR: navigation.goBack(); and BookingScreen uses a listener or context.
-
-		// For now, just show message and user can manually go back or we can auto goBack.
-		// Alert.alert("Promo Applied!", `"${promo.promoCode}" has been applied.`);
-		// navigation.goBack(); // Could go back automatically
+		// Call the callback if it exists to pass data back to BookingScreen
+		if (onApplyPromoCallback) {
+			onApplyPromoCallback({
+				promoCode: promo.promoCode,
+				description: promo.description,
+				// Pass discountValue, discountType if available from promo object
+			});
+		}
+		// Optionally navigate back after a short delay
+		setTimeout(() => {
+			if (navigation.canGoBack()) navigation.goBack();
+		}, 1500); // Delay for user to see success message
 	};
 
 	return (
 		<ScrollView
 			style={styles.container}
-			contentContainerStyle={styles.contentContainer}>
+			contentContainerStyle={styles.contentContainer}
+			keyboardShouldPersistTaps="handled">
 			<View style={styles.inputSection}>
-				<StyledTextInput
-					placeholder="Enter code here"
+				<StyledTextInput // Assumed themed: dark bg, light text/placeholder
+					placeholder="Enter promo code"
 					value={manualPromoCode}
-					onChangeText={setManualPromoCode}
+					onChangeText={(text) => {
+						setManualPromoCode(text);
+						if (errorMessage) setErrorMessage(null); // Clear error on typing
+						if (successMessage) setSuccessMessage(null); // Clear success on typing
+					}}
 					containerStyle={styles.promoInputContainer}
-					// inputStyle={{height: 48}} // Match button height
 					autoCapitalize="characters"
 				/>
-			
 				<TouchableOpacity
 					style={[
 						styles.applyManualButton,
-						manualPromoCode.trim() === "" &&
+						(manualPromoCode.trim() === "" || loading) &&
 							styles.applyManualButtonDisabled,
 					]}
 					onPress={handleApplyManualCode}
 					disabled={manualPromoCode.trim() === "" || loading}>
-					<Text style={styles.applyManualButtonText}>
-						{loading ? "Applying..." : "Apply"}
-					</Text>
+					{loading ? (
+						<ActivityIndicator
+							size="small"
+							color={colors.buttonPrimaryText}
+						/>
+					) : (
+						<Text style={styles.applyManualButtonText}>Apply</Text>
+					)}
 				</TouchableOpacity>
 			</View>
 
+			{errorMessage && (
+				<View style={styles.messageContainerError}>
+					<MaterialIcons
+						name="error-outline"
+						size={20}
+						color={colors.error}
+						style={styles.messageIcon}
+					/>
+					<Text style={styles.messageTextError}>{errorMessage}</Text>
+				</View>
+			)}
+
 			{successMessage && (
-				<View style={styles.successMessageContainer}>
-					<Text style={styles.successIcon}>✓</Text>
-					<Text style={styles.successMessageText}>
+				<View style={styles.messageContainerSuccess}>
+					<MaterialIcons
+						name="check-circle-outline"
+						size={20}
+						color={colors.success}
+						style={styles.messageIcon}
+					/>
+					<Text style={styles.messageTextSuccess}>
 						{successMessage}
 					</Text>
 				</View>
 			)}
 
-			<Text style={styles.sectionTitle}>Available Offers for You</Text>
+			<Text style={styles.sectionTitle}>Available Offers</Text>
 			{availablePromos.length > 0 ? (
 				<FlatList
 					data={availablePromos}
 					renderItem={({ item }) => (
-						<PromoCard
+						<PromoCard // This component needs to be themed for dark mode
 							promoCode={item.promoCode}
 							description={item.description}
 							validityText={item.validityText}
 							onApply={() => applyPromo(item)}
-							// style={appliedPromo?.id === item.id ? styles.appliedPromoCard : {}} // Example style for applied
+							isApplied={appliedPromo?.id === item.id} // Pass if it's the currently applied one
+							// style={appliedPromo?.id === item.id ? styles.appliedPromoCard : {}}
 						/>
 					)}
 					keyExtractor={(item) => item.id}
-					scrollEnabled={false} // If ScrollView is the parent
+					scrollEnabled={false} // ScrollView is the parent
+					ItemSeparatorComponent={() => (
+						<View style={{ height: spacing.s }} />
+					)}
 				/>
 			) : (
 				<Text style={styles.noPromosText}>
-					No available offers at the moment.
+					No offers available at the moment.
 				</Text>
 			)}
 
 			<View style={styles.infoNoteContainer}>
-				<Text style={styles.infoIcon}>ⓘ</Text>
+				<MaterialIcons
+					name="info-outline"
+					size={20}
+					color={colors.info}
+					style={styles.messageIcon}
+				/>
 				<Text style={styles.infoNoteText}>
-					Only one promo can be used per booking.
+					Only one promo code can be applied per booking. Terms and
+					conditions apply.
 				</Text>
 			</View>
 		</ScrollView>
@@ -191,88 +229,109 @@ const ApplyPromoCodeScreen: React.FC<ApplyPromoCodeScreenProps> = ({
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: colors.backgroundMain || "#F4F4F4",
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	contentContainer: {
 		padding: spacing.m,
+		paddingBottom: spacing.xxl, // Ensure space at bottom
 	},
 	inputSection: {
 		flexDirection: "row",
-		alignItems: "flex-start", // Align items to top if input grows
+		alignItems: "center", // Center items vertically if input and button have same height
 		marginBottom: spacing.l,
 	},
 	promoInputContainer: {
+		// For StyledTextInput wrapper
 		flex: 1,
 		marginRight: spacing.s,
-		marginBottom: 0, // Reset default from StyledTextInput
+		marginBottom: 0,
+		// StyledTextInput should internally use colors.backgroundCard, colors.textPrimary, colors.textPlaceholder
 	},
 	applyManualButton: {
-		backgroundColor: "#5E6E2A", // Darker olive green from design (approximate)
-		paddingVertical: spacing.m + 2, // Match typical input height
+		backgroundColor: colors.primary, // Themed primary button color
+		paddingVertical: spacing.m, // Consistent padding
 		paddingHorizontal: spacing.l,
 		borderRadius: borderRadius.m,
 		justifyContent: "center",
 		alignItems: "center",
-		minHeight: 48, // Ensure good tap height
+		minHeight: 48, // Good tap height
 	},
 	applyManualButtonDisabled: {
-		backgroundColor: colors.greyMedium, // Or a lighter shade of the olive green
+		backgroundColor: colors.buttonPrimaryDisabledBackground, // Themed disabled color
 	},
 	applyManualButtonText: {
-		color: colors.white,
+		color: colors.buttonPrimaryText, // Text color for primary button
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.semiBold,
+		fontFamily: typography.primarySemiBold,
 	},
-	successMessageContainer: {
+	messageContainerSuccess: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: colors.primaryLight || "#E6F7FF", // Light green tint
+		backgroundColor: colors.backgroundCard, // Dark card background
 		padding: spacing.m,
 		borderRadius: borderRadius.m,
 		marginBottom: spacing.l,
+		borderLeftWidth: 4,
+		borderLeftColor: colors.success, // Success indicator
 	},
-	successIcon: {
-		fontSize: typography.fontSizes.l,
-		color: colors.primary || "green", // Or a success green
+	messageContainerError: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: colors.backgroundCard, // Dark card background
+		padding: spacing.m,
+		borderRadius: borderRadius.m,
+		marginBottom: spacing.l,
+		borderLeftWidth: 4,
+		borderLeftColor: colors.error, // Error indicator
+	},
+	messageIcon: {
 		marginRight: spacing.s,
-		fontWeight: "bold",
 	},
-	successMessageText: {
+	messageTextSuccess: {
 		fontSize: typography.fontSizes.m,
-		color: colors.primaryDark || colors.primary, // Darker shade of primary
+		fontFamily: typography.primaryRegular,
+		color: colors.success, // Success text color
+		flexShrink: 1,
+	},
+	messageTextError: {
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
+		color: colors.textError, // Error text color
 		flexShrink: 1,
 	},
 	sectionTitle: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.semiBold,
-		color: colors.textPrimary,
+		fontFamily: typography.primarySemiBold,
+		color: colors.textPrimary, // Light text for titles
 		marginBottom: spacing.m,
 	},
 	noPromosText: {
 		textAlign: "center",
-		color: colors.primaryLight,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted text
 		marginVertical: spacing.l,
+		fontSize: typography.fontSizes.m,
 	},
-	// appliedPromoCard: { // Example
-	//   opacity: 0.6,
+	// appliedPromoCard: { // Example if PromoCard needs specific styling when applied
+	//  borderColor: colors.primary,
+	//  borderWidth: 2,
 	// },
 	infoNoteContainer: {
 		flexDirection: "row",
-		alignItems: "center",
-		backgroundColor: colors.backgroundLight || "#F0F0F0", // Light grey tint
+		alignItems: "flex-start", // Align icon to top of text if text wraps
+		backgroundColor: colors.backgroundCard, // Dark card background
 		padding: spacing.m,
 		borderRadius: borderRadius.m,
-		marginTop: spacing.l,
-	},
-	infoIcon: {
-		fontSize: typography.fontSizes.l,
-		color: colors.primaryLight,
-		marginRight: spacing.s,
+		marginTop: spacing.xl, // More space before this note
+		borderLeftWidth: 4,
+		borderLeftColor: colors.info, // Info indicator
 	},
 	infoNoteText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.primaryLight,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted text for notes
 		flexShrink: 1,
+		lineHeight: typography.lineHeights.getForSize(typography.fontSizes.s),
 	},
 });
 

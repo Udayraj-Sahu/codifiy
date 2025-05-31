@@ -9,26 +9,29 @@ import {
 } from "@react-navigation/stack";
 import React from "react";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import HomeScreen from "../screens/App/Home/HomeScreen"; // NEW
+import { Platform } from "react-native";
+import HomeScreen from "../screens/App/Home/HomeScreen";
 import MyRentalsScreen from "../screens/App/Rental/MyRentalsScreen";
 import { TabBarIconProps } from "./types";
-// Import your screen components (ensure paths match your project structure)
+
 import ApplyPromoCodeScreen from "../screens/App/Booking/ApplyPromoCodeScreen";
 import BookingConfirmationScreen from "../screens/App/Booking/BookingConfirmationScreen";
 import BookingScreen from "../screens/App/Booking/BookingScreen";
 import BikeDetailsScreen from "../screens/App/Explore/BikeDetailsScreen";
 import ExploreScreen from "../screens/App/Explore/ExploreScreen";
 import FilterScreen from "../screens/App/Explore/FilterScreen";
-// Ensure these paths are correct for your project:
-import ScreenHeader from "../components/common/ScreenHeader"; // Using your specified path
+// Ensure ScreenHeader is correctly themed internally
+import ScreenHeader from "../components/common/ScreenHeader";
 import DocumentUploadScreen from "../screens/App/Documents/DocumentUploadScreen";
 import NotificationsScreen from "../screens/App/Home/NotificationsScreen";
 import EditProfileScreen from "../screens/App/Profile/EditProfileScreen";
 import ProfileScreen from "../screens/App/Profile/ProfileScreen";
-import SettingsScreen from "../screens/App/Profile/SettingScreen"; // Corrected to SettingsScreen
+import SettingsScreen from "../screens/App/Profile/SettingScreen";
 import AddMoneyScreen from "../screens/App/Wallet/AddMoneyScreen";
 import WalletPaymentsScreen from "../screens/App/Wallet/WalletPaymentScreen";
-import { colors, typography } from "../theme"; // Using your specified path
+
+// Assuming colors imported from here now refer to the dark theme palette
+import { colors, typography } from "../theme"; // Added spacing for potential use in header
 
 import {
 	ExploreStackParamList,
@@ -36,9 +39,10 @@ import {
 	ProfileStackParamList,
 	UserTabParamList,
 	WalletStackParamList,
-} from "./types"; // Correct, as it's in the same folder
+} from "./types";
 
 // --- Common Stack Navigator Options using our Custom Header ---
+// ScreenHeader is responsible for its own styling using theme colors.
 const customStackScreenOptions: (navigation: any) => StackNavigationOptions = (
 	navigation
 ) => ({
@@ -52,87 +56,76 @@ const customStackScreenOptions: (navigation: any) => StackNavigationOptions = (
 				onPressBack={
 					showBackButton ? () => navigation.goBack() : undefined
 				}
+				// ScreenHeader should internally use:
+				// backgroundColor: colors.backgroundHeader,
+				// titleColor: colors.textPrimary,
+				// iconColor: colors.iconWhite (or textPrimary for back arrow)
 			/>
 		);
 	},
+	// You can also set cardStyle for the stack navigator if needed for transitions or overall bg
+	// cardStyle: { backgroundColor: colors.backgroundMain },
 });
 
-// --- Placeholder Tab Bar Icon Component ---
-const TabBarIcon: React.FC<TabBarIconProps> = ({
-	name,
-	focused,
-	color,
-	size,
-}) => {
-	let iconNameToRender: string; // Renamed to avoid confusion with the 'name' prop
+// --- Tab Bar Icon Component ---
+const TabBarIcon: React.FC<TabBarIconProps> = ({ name, focused, color }) => {
+	let iconNameToRender: string;
+	let iconSize = focused ? 28 : 24;
 
 	if (name === "HomeTab") {
-		iconNameToRender = focused ? "home" : "dashboard";
-		size = 30; // Material Community Icons has home-outline
-		// For standard MaterialIcons, 'home' is usually sufficient, color indicates focus.
-		// Or, just use 'home' and let 'color' prop handle the visual difference.
-		// iconNameToRender = "home";
+		iconNameToRender = focused ? "home" : "home-outline";
 	} else if (name === "ExploreTab") {
-		iconNameToRender = focused ? "explore" : "explore-off";
-		size = 30; // Or "search", "map"
-		// iconNameToRender = "explore";
+		iconNameToRender = focused ? "explore" : "explore";
 	} else if (name === "WalletTab") {
-		iconNameToRender = focused ? "payments" : "payment";
-		size = 30; // Material Community Icons
-		// For standard MaterialIcons:
-		// iconNameToRender = "account-balance-wallet";
+		iconNameToRender = focused
+			? "account-balance-wallet"
+			: "account-balance-wallet";
 	} else if (name === "ProfileTab") {
 		iconNameToRender = focused ? "person" : "person-outline";
-		size = 30;
-		// Or "account-circle" / "account-circle-outline"
-		// iconNameToRender = "account-circle";
 	} else {
-		// Fallback icon in case a name doesn't match
 		iconNameToRender = "help-outline";
 	}
-
-	// The 'fontWeight' style is not directly applicable to MaterialIcons component.
-	// The 'focused' state is primarily handled by the 'color' prop provided
-	// by React Navigation (activeTintColor/inactiveTintColor) and potentially
-	// by choosing different icon variants (e.g., filled vs. outline) as shown above.
-
-	return <MaterialIcons name={iconNameToRender} size={size} color={color} />;
+	return (
+		<MaterialIcons name={iconNameToRender} size={iconSize} color={color} />
+	);
 };
 
 const HomeStack = createStackNavigator<HomeStackParamList>();
 const HomeStackNavigator: React.FC = () => (
-	<HomeStack.Navigator initialRouteName="HomeScreenRoot">
+	<HomeStack.Navigator
+		initialRouteName="HomeScreenRoot"
+		// Apply customStackScreenOptions to screens that need the themed header
+		screenOptions={({ navigation }) =>
+			customStackScreenOptions(navigation)
+		}>
 		<HomeStack.Screen
 			name="HomeScreenRoot"
 			component={HomeScreen}
-			options={{ headerShown: false }} // As HomeScreen will have its own custom top section
+			options={{ headerShown: false }} // HomeScreen has its own custom header section
 		/>
 		<HomeStack.Screen
-			name="NotificationsScreen" // Screen added here
+			name="NotificationsScreen"
 			component={NotificationsScreen}
-			options={{ title: "Notifications" }} // Default title, can be overridden by ScreenHeader in NotificationsScreen
+			options={{ title: "Notifications" }} // Title used by ScreenHeader
 		/>
 	</HomeStack.Navigator>
 );
 
-// --- 1. Explore Stack ---
-
-// UserAppNavigator.tsx
-
-// --- 1. Explore Stack ---
 const ExploreStack = createStackNavigator<ExploreStackParamList>();
 const ExploreStackNavigator: React.FC = () => (
 	<ExploreStack.Navigator
 		screenOptions={({ navigation }) => customStackScreenOptions(navigation)}
 		initialRouteName="Explore">
-		{/* NO STRAY SPACES OR CHARACTERS ALLOWED DIRECTLY HERE OR BETWEEN SCREEN COMPONENTS */}
 		<ExploreStack.Screen
 			name="Explore"
 			component={ExploreScreen}
 			options={{ title: "Explore Bikes" }}
 		/>
-		{/* Ensure there's nothing here ^ and v like accidental spaces or newlines or invalid comments */}
-		<ExploreStack.Screen name="BikeDetails" component={BikeDetailsScreen} />
+		<ExploreStack.Screen
+			name="BikeDetails"
+			component={BikeDetailsScreen}
+			options={{ title: "Bike Details" }}
+		/>
 		<ExploreStack.Screen
 			name="Booking"
 			component={BookingScreen}
@@ -151,14 +144,13 @@ const ExploreStackNavigator: React.FC = () => (
 		<ExploreStack.Screen
 			name="Filter"
 			component={FilterScreen}
-			options={{ presentation: "modal", title: "Filter Bikes" }}
+			options={{ presentation: "modal", title: "Filter Bikes" }} // Modal might use default header depending on platform
 		/>
 		<ExploreStack.Screen
 			name="DocumentUploadScreen_FromExplore"
 			component={DocumentUploadScreen}
 			options={{ title: "Upload Document" }}
 		/>
-		{/* NO STRAY SPACES OR CHARACTERS ALLOWED HERE EITHER */}
 	</ExploreStack.Navigator>
 );
 
@@ -170,21 +162,16 @@ const WalletStackNavigator: React.FC = () => (
 		<WalletStack.Screen
 			name="WalletPaymentsScreen"
 			component={WalletPaymentsScreen}
-			options={{ title: "Wallet & Payments" }}
+			options={{ title: "Wallet" }}
 		/>
-		<WalletStack.Screen // <<< ADD THIS SCREEN DEFINITION
+		<WalletStack.Screen
 			name="AddMoneyScreen"
 			component={AddMoneyScreen}
-			options={{ title: "Add Money to Wallet" }}
+			options={{ title: "Add Money" }}
 		/>
-		{/* Example future screens in this stack:
-    <WalletStack.Screen name="AddMoneyScreen" component={AddMoneyScreen} options={{ title: 'Add Money' }} />
-    <WalletStack.Screen name="TransactionHistoryScreen" component={TransactionHistoryScreen} options={{ title: 'Transaction History' }} />
-    <WalletStack.Screen name="AddPaymentMethodScreen" component={AddPaymentMethodScreen} options={{ title: 'Add Payment Method' }} />
-    */}
 	</WalletStack.Navigator>
 );
-// --- 4. Profile Stack ---
+
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 const ProfileStackNavigator: React.FC = () => (
 	<ProfileStack.Navigator
@@ -208,46 +195,69 @@ const ProfileStackNavigator: React.FC = () => (
 		<ProfileStack.Screen
 			name="MyRentalsScreen"
 			component={MyRentalsScreen}
-			options={{ title: "My Rentals" }} // Title for the MyRentalsScreen header
+			options={{ title: "My Rentals" }}
 		/>
 		<ProfileStack.Screen
-			name="DocumentUploadScreen" // Added here
+			name="DocumentUploadScreen"
 			component={DocumentUploadScreen}
-			options={{ title: "Upload Document" }} // Or can be set dynamically in the screen
+			options={{ title: "Upload Document" }}
+		/>
+		{/* Add other screens like ChangePasswordScreen here if they belong to ProfileStack */}
+		<ProfileStack.Screen
+			name="ChangePasswordScreen"
+			component={SettingsScreen}
+			options={{ title: "Change Password" }}
+		/>
+		<ProfileStack.Screen
+			name="NotificationPreferencesScreen"
+			component={SettingsScreen}
+			options={{ title: "Notifications" }}
+		/>
+		<ProfileStack.Screen
+			name="ContactSupportScreen"
+			component={SettingsScreen}
+			options={{ title: "Help & Support" }}
+		/>
+		<ProfileStack.Screen
+			name="RideDetailsScreen"
+			component={MyRentalsScreen}
+			options={{ title: "Ride Details" }}
 		/>
 	</ProfileStack.Navigator>
 );
 
-// --- Main User Tab Navigator ---
 const Tab = createBottomTabNavigator<UserTabParamList>();
 
 const UserAppNavigator: React.FC = () => {
 	return (
 		<Tab.Navigator
 			screenOptions={({ route }): BottomTabNavigationOptions => ({
-				/* ... tab options as before, ensure TabBarIcon handles 'HomeTab' ... */
 				headerShown: false,
-				tabBarIcon: ({ focused, color, size }) => (
+				tabBarIcon: ({ focused, color }) => (
 					<TabBarIcon
 						name={route.name as keyof UserTabParamList}
 						focused={focused}
 						color={color}
-						size={focused ? 24 : 20}
+						size={0} // Size is handled internally by TabBarIcon
 					/>
 				),
 				tabBarActiveTintColor: colors.primary,
-				tabBarInactiveTintColor: colors.textMedium,
+				tabBarInactiveTintColor: colors.iconDefault,
 				tabBarStyle: {
-					backgroundColor: colors.white,
+					backgroundColor: colors.backgroundCard, // Dark tab bar
 					borderTopColor: colors.borderDefault,
+					paddingTop: 5,
+					height: Platform.OS === "ios" ? 90 : 60,
 				},
 				tabBarLabelStyle: {
 					fontSize: typography.fontSizes.xs,
-					fontWeight: typography.fontWeights.medium,
+					fontFamily: typography.primaryRegular,
+					marginBottom: Platform.OS === "ios" ? 0 : 5,
 				},
+				tabBarHideOnKeyboard: true,
 			})}>
 			<Tab.Screen
-				name="HomeTab" // NEW
+				name="HomeTab"
 				component={HomeStackNavigator}
 				options={{ title: "Home" }}
 			/>
@@ -256,7 +266,6 @@ const UserAppNavigator: React.FC = () => {
 				component={ExploreStackNavigator}
 				options={{ title: "Explore" }}
 			/>
-
 			<Tab.Screen
 				name="WalletTab"
 				component={WalletStackNavigator}

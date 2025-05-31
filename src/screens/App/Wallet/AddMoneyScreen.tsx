@@ -2,6 +2,7 @@
 import { StackNavigationProp } from "@react-navigation/stack";
 import React, { useEffect, useState } from "react";
 import {
+	ActivityIndicator,
 	Alert,
 	Keyboard,
 	ScrollView,
@@ -10,10 +11,11 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import RazorpayCheckout from "react-native-razorpay"; // Import Razorpay
+import RazorpayCheckout from "react-native-razorpay";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
 import { useDispatch, useSelector } from "react-redux";
-import PrimaryButton from "../../../components/common/PrimaryButton";
-import StyledTextInput from "../../../components/common/StyledTextInput";
+import PrimaryButton from "../../../components/common/PrimaryButton"; // Assumed to be themed
+import StyledTextInput from "../../../components/common/StyledTextInput"; // Assumed to be themed
 import { WalletStackParamList } from "../../../navigation/types";
 import {
 	AddMoneyVerifyParams,
@@ -35,13 +37,11 @@ interface AddMoneyScreenProps {
 	navigation: ScreenNavigationProp;
 }
 
-const PRESET_AMOUNTS = [500, 1000, 2000, 5000]; // Amounts in primary currency unit (e.g., INR)
+const PRESET_AMOUNTS = [500, 1000, 2000, 5000];
 
 const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 	const dispatch = useDispatch<AppDispatch>();
-	const { user: authUser, token } = useSelector(
-		(state: RootState) => state.auth
-	);
+	const { user: authUser } = useSelector((state: RootState) => state.auth);
 	const {
 		orderResponse,
 		isInitiating,
@@ -56,21 +56,22 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 	const [amount, setAmount] = useState("");
 	const [customAmountFocused, setCustomAmountFocused] = useState(false);
 
+	const bikyaLogoForRazorpay =
+		"https://placehold.co/100x100/1A1A1A/FFFFFF?text=BKY"; // Dark theme friendly placeholder
+
 	useEffect(() => {
 		dispatch(resetAddMoneyProcess());
 		dispatch(clearWalletErrors());
-		// Fetch current balance when screen loads to show it accurately
 		dispatch(fetchUserWalletThunk());
 
 		const keyboardDidHideListener = Keyboard.addListener(
 			"keyboardDidHide",
 			() => {
-				Keyboard.dismiss(); // Ensure keyboard is fully dismissed
+				Keyboard.dismiss();
 			}
 		);
-
 		return () => {
-			dispatch(resetAddMoneyProcess()); // Clean up on unmount
+			dispatch(resetAddMoneyProcess());
 			keyboardDidHideListener.remove();
 		};
 	}, [dispatch]);
@@ -82,28 +83,24 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 			orderResponse.razorpayKeyId &&
 			!isVerifying
 		) {
-			// Check !isVerifying
 			const razorpayOptions = {
 				description: "Add money to Bikya Wallet",
-				image: "https://via.placeholder.com/100.png?text=Bikya", // Replace with your app logo URL
+				image: bikyaLogoForRazorpay,
 				currency: orderResponse.currency || "INR",
 				key: orderResponse.razorpayKeyId,
-				amount: orderResponse.amount.toString(), // Amount in paisa, as string
+				amount: orderResponse.amount.toString(),
 				name: "Bikya Wallet Top-up",
 				order_id: orderResponse.razorpayOrderId,
 				prefill: {
 					email: authUser.email,
-					contact: (authUser as any).phone || "",
+					contact: authUser.phoneNumber || "", // Ensure phoneNumber is available on authUser
 					name: authUser.fullName,
 				},
-				theme: { color: colors.primary },
+				theme: { color: colors.primary }, // Use theme's primary color
 			};
 
-			console.log("Opening Razorpay with options:", razorpayOptions);
 			RazorpayCheckout.open(razorpayOptions)
 				.then(async (data: any) => {
-					// Razorpay success
-					console.log(`Razorpay Success: ${JSON.stringify(data)}`);
 					const verifyParams: AddMoneyVerifyParams = {
 						razorpay_payment_id: data.razorpay_payment_id,
 						razorpay_order_id: data.razorpay_order_id,
@@ -119,6 +116,7 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 							"Success",
 							"Money added to your wallet successfully!"
 						);
+						dispatch(fetchUserWalletThunk()); // Refresh wallet balance
 						navigation.goBack();
 					} else if (
 						verifyAddMoneyPaymentThunk.rejected.match(resultAction)
@@ -130,22 +128,24 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 					}
 				})
 				.catch((error: any) => {
-					// Razorpay error or cancellation
-					console.error(
-						`Razorpay Error: Code: ${error.code} | Description: ${error.description}`
-					);
-					// Code 0: Network error, Code 1: Initialization failure, Code 2: Payment cancelled by user
 					if (error.code !== 2) {
-						// Don't show alert if user just cancelled
+						// Code 2: Payment cancelled by user
 						Alert.alert(
 							"Payment Failed",
 							error.description || "Could not complete payment."
 						);
 					}
-					dispatch(resetAddMoneyProcess());
+					dispatch(resetAddMoneyProcess()); // Reset process on any Razorpay error/cancellation
 				});
 		}
-	}, [orderResponse, authUser, dispatch, navigation, isVerifying]); // isVerifying added to deps
+	}, [
+		orderResponse,
+		authUser,
+		dispatch,
+		navigation,
+		isVerifying,
+		colors.primary,
+	]);
 
 	const handleAmountSelect = (selectedAmount: number) => {
 		setAmount(String(selectedAmount));
@@ -185,9 +185,14 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 				<Text style={styles.currentBalanceValue}>
 					₹
 					{currentWalletBalance !== null &&
-					currentWalletBalance !== undefined
-						? (currentWalletBalance / 100).toFixed(2)
-						: "Loading..."}
+					currentWalletBalance !== undefined ? (
+						(currentWalletBalance / 100).toFixed(2)
+					) : (
+						<ActivityIndicator
+							size="small"
+							color={colors.primary}
+						/>
+					)}
 				</Text>
 			</View>
 
@@ -216,7 +221,7 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 				))}
 			</View>
 
-			<StyledTextInput
+			<StyledTextInput // Assumed themed
 				label="Or Enter Custom Amount"
 				placeholder="e.g., 1250"
 				value={amount}
@@ -228,15 +233,27 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 				containerStyle={styles.customAmountInput}
 				onFocus={() => setCustomAmountFocused(true)}
 				returnKeyType="done"
+				// Pass themed props if StyledTextInput doesn't get them from context
+				// labelTextStyle={{color: colors.textSecondary}}
+				// inputStyle={{backgroundColor: colors.backgroundInput, borderColor: colors.borderDefault, color: colors.textPrimary}}
+				// placeholderTextColor={colors.textPlaceholder}
 			/>
 
 			{(initiateError || verifyError) && (
-				<Text style={styles.errorText}>
-					Error: {initiateError || verifyError}
-				</Text>
+				<View style={styles.errorContainer}>
+					<MaterialIcons
+						name="error-outline"
+						size={20}
+						color={colors.error}
+						style={styles.errorIcon}
+					/>
+					<Text style={styles.errorText}>
+						Error: {initiateError || verifyError}
+					</Text>
+				</View>
 			)}
 
-			<PrimaryButton
+			<PrimaryButton // Assumed themed
 				title={
 					isInitiating
 						? "Processing..."
@@ -253,90 +270,146 @@ const AddMoneyScreen: React.FC<AddMoneyScreenProps> = ({ navigation }) => {
 					parseFloat(amount) <= 0
 				}
 				style={styles.confirmButton}
+				// iconLeft={<MaterialIcons name="account-balance-wallet" size={20} color={colors.buttonPrimaryText} />}
 			/>
 
-			<Text style={styles.infoText}>
-				You will be redirected to our secure payment gateway to complete
-				the transaction. All payments are processed by Razorpay.
-			</Text>
+			<View style={styles.infoNoteContainer}>
+				<MaterialIcons
+					name="security"
+					size={20}
+					color={colors.info}
+					style={styles.infoIconThemed}
+				/>
+				<Text style={styles.infoText}>
+					You will be redirected to our secure payment gateway
+					(Razorpay) to complete the transaction.
+				</Text>
+			</View>
 		</ScrollView>
 	);
 };
 
 const styles = StyleSheet.create({
-	screenContainer: { flex: 1, backgroundColor: colors.backgroundMain },
-	contentContainer: { padding: spacing.m, paddingBottom: spacing.xl },
+	screenContainer: {
+		flex: 1,
+		backgroundColor: colors.backgroundMain,
+	},
+	contentContainer: {
+		padding: spacing.m,
+		paddingBottom: spacing.xxl,
+	},
 	balanceDisplayCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background
 		paddingVertical: spacing.l,
 		paddingHorizontal: spacing.xl,
-		borderRadius: borderRadius.m,
+		borderRadius: borderRadius.l, // More rounded
 		marginBottom: spacing.xl,
 		alignItems: "center",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.1,
-		shadowRadius: 3,
-		elevation: 2,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	currentBalanceLabel: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
 		marginBottom: spacing.xs,
 	},
 	currentBalanceValue: {
 		fontSize: typography.fontSizes.xxxl,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.primary,
+		fontFamily: typography.primaryBold,
+		color: colors.primary, // Accent color for balance
 	},
 	sectionTitle: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.semiBold,
-		color: colors.textPrimary,
+		fontFamily: typography.primarySemiBold,
+		color: colors.textPrimary, // Light text
 		marginBottom: spacing.m,
 	},
 	presetAmountsContainer: {
 		flexDirection: "row",
-		justifyContent: "space-around", // Changed to space-around
+		justifyContent: "space-between", // Keep space-between
 		alignItems: "center",
 		marginBottom: spacing.l,
-		flexWrap: "wrap", // Allow wrapping if many chips
+		flexWrap: "wrap",
 	},
 	amountChip: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background for unselected chips
 		paddingVertical: spacing.m,
-		borderRadius: borderRadius.pill,
+		borderRadius: borderRadius.m, // Standard radius
 		borderWidth: 1.5,
-		borderColor: colors.primaryLight,
-		flexGrow: 1, // Allow chips to grow
-		margin: spacing.xs,
+		borderColor: colors.borderDefault, // Themed border for unselected
+		flexBasis: "48%", // Ensure two chips per row with a small gap
+		marginBottom: spacing.s, // Space between rows of chips
 		alignItems: "center",
-		minWidth: "40%", // Ensure at least 2 chips per row
 	},
 	amountChipSelected: {
-		backgroundColor: colors.primary,
+		backgroundColor: colors.primary, // Primary color for selected
 		borderColor: colors.primary,
 	},
 	amountChipText: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.semiBold,
-		color: colors.primary,
+		fontFamily: typography.primarySemiBold,
+		color: colors.textPrimary, // Light text for unselected chip
 	},
-	amountChipTextSelected: { color: colors.white },
-	customAmountInput: { marginBottom: spacing.l },
-	confirmButton: { marginTop: spacing.m, backgroundColor: colors.success },
+	amountChipTextSelected: {
+		color: colors.buttonPrimaryText, // Text color for selected chip (contrasts with primary bg)
+		fontFamily: typography.primaryBold,
+	},
+	customAmountInput: {
+		// For StyledTextInput container
+		marginBottom: spacing.l,
+		// StyledTextInput should use themed colors internally:
+		// background: colors.backgroundInput, text: colors.textPrimary, placeholder: colors.textPlaceholder
+	},
+	confirmButton: {
+		// For PrimaryButton instance
+		marginTop: spacing.m,
+		// PrimaryButton handles its own theming. Using colors.success was an override.
+		// If it's the main action, it should use default PrimaryButton style.
+	},
+	infoNoteContainer: {
+		// Themed info box
+		flexDirection: "row",
+		alignItems: "flex-start",
+		backgroundColor: colors.backgroundCard,
+		padding: spacing.m,
+		borderRadius: borderRadius.m,
+		marginTop: spacing.xl,
+		borderLeftWidth: 4,
+		borderLeftColor: colors.info,
+	},
+	infoIconThemed: {
+		// For MaterialIcons in info box
+		marginRight: spacing.s,
+		marginTop: spacing.xxs, // Align with first line of text
+	},
 	infoText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
-		textAlign: "center",
-		marginTop: spacing.l,
-		paddingHorizontal: spacing.m,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
+		textAlign: "left", // Align text properly
+		flexShrink: 1, // Allow text to wrap
+		lineHeight: typography.lineHeights.getForSize(typography.fontSizes.s),
+	},
+	errorContainer: {
+		// Container for error message + icon
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: colors.errorMuted, // Use a muted error background
+		padding: spacing.s,
+		borderRadius: borderRadius.m,
+		marginBottom: spacing.m,
+		marginTop: spacing.s,
+	},
+	errorIcon: {
+		marginRight: spacing.s,
 	},
 	errorText: {
-		color: colors.error,
-		textAlign: "center",
-		marginBottom: spacing.m,
+		color: colors.textError, // Themed error text color
+		// textAlign: "center", // Centering might not be needed if in errorContainer
+		flex: 1, // Allow text to take space
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 	},
 });
 

@@ -8,7 +8,9 @@ import React, {
 	useState,
 } from "react";
 import {
+	ActivityIndicator,
 	FlatList,
+	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -16,24 +18,28 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
 import {
 	AdminStackParamList,
 	DocumentStatusAdmin,
-} from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "../../navigation/types";
+import { borderRadius, colors, spacing, typography } from "../../theme";
+// Not using Redux in this version as per "don't change anything" regarding logic
+// import { useDispatch, useSelector } from "react-redux";
+// import { AppDispatch, RootState } from "../../store/store";
+// import { fetchDocumentsForReviewThunk, updateDocumentStatusThunk } from "../../store/slices/documentSlice";
 
-// --- Types and Dummy Data ---
+// --- Types and Dummy Data (structure remains, placeholders updated for dark theme & icons) ---
 interface AdminDocumentInfo {
-	id: string; // Document ID
+	id: string;
 	userId: string;
 	userName: string;
 	userEmail: string;
 	documentType: "Driving License" | "ID Proof" | "Passport";
-	docIconPlaceholder: string;
-	submittedDate: string; // e.g., "Today, 2:30 PM" or full date
-	status: Exclude<DocumentStatusAdmin, "all">; // Individual doc status
-	// documentImageUrl?: string; // For viewing
+	docIconName: keyof typeof MaterialIcons.glyphMap; // Changed from docIconPlaceholder
+	submittedDate: string;
+	status: Exclude<DocumentStatusAdmin, "all">;
+	documentImageUrl?: string; // For navigation to viewer
 }
 
 const DUMMY_ALL_DOCUMENTS: AdminDocumentInfo[] = [
@@ -43,9 +49,11 @@ const DUMMY_ALL_DOCUMENTS: AdminDocumentInfo[] = [
 		userName: "Sarah Johnson",
 		userEmail: "sarah.j@example.com",
 		documentType: "Driving License",
-		docIconPlaceholder: "💳",
-		submittedDate: "Today, 2:30 PM",
+		docIconName: "credit-card",
+		submittedDate: "May 30, 10:30 AM",
 		status: "approved",
+		documentImageUrl:
+			"https://placehold.co/800x600/1A1A1A/F5F5F5?text=SJ+DL",
 	},
 	{
 		id: "doc2",
@@ -53,9 +61,11 @@ const DUMMY_ALL_DOCUMENTS: AdminDocumentInfo[] = [
 		userName: "Michael Chen",
 		userEmail: "michael.c@example.com",
 		documentType: "ID Proof",
-		docIconPlaceholder: "📄",
-		submittedDate: "Today, 11:45 AM",
+		docIconName: "badge",
+		submittedDate: "May 30, 09:45 AM",
 		status: "pending",
+		documentImageUrl:
+			"https://placehold.co/800x600/1A1A1A/F5F5F5?text=MC+ID",
 	},
 	{
 		id: "doc3",
@@ -63,43 +73,14 @@ const DUMMY_ALL_DOCUMENTS: AdminDocumentInfo[] = [
 		userName: "Emma Wilson",
 		userEmail: "emma.w@example.com",
 		documentType: "Passport",
-		docIconPlaceholder: "🛂",
-		submittedDate: "Yesterday, 4:15 PM",
+		docIconName: "book",
+		submittedDate: "May 29, 04:15 PM",
 		status: "rejected",
-	},
-	{
-		id: "doc4",
-		userId: "u4",
-		userName: "David Lee",
-		userEmail: "david.l@example.com",
-		documentType: "Driving License",
-		docIconPlaceholder: "💳",
-		submittedDate: "This Week, Mon 9:00 AM",
-		status: "approved",
-	},
-	{
-		id: "doc5",
-		userId: "u5",
-		userName: "Olivia Brown",
-		userEmail: "olivia.b@example.com",
-		documentType: "ID Proof",
-		docIconPlaceholder: "📄",
-		submittedDate: "This Week, Tue 1:00 PM",
-		status: "pending",
-	},
-	{
-		id: "doc6",
-		userId: "u6",
-		userName: "James White",
-		userEmail: "james.w@example.com",
-		documentType: "Passport",
-		docIconPlaceholder: "🛂",
-		submittedDate: "Last Week, Fri 10:00 AM",
-		status: "approved",
+		documentImageUrl:
+			"https://placehold.co/800x600/1A1A1A/F5F5F5?text=EW+Pass",
 	},
 ];
 
-// Simulate API call
 const fetchAdminDocumentsAPI = async (filters: {
 	status: DocumentStatusAdmin;
 	searchQuery?: string;
@@ -107,7 +88,10 @@ const fetchAdminDocumentsAPI = async (filters: {
 	console.log("Fetching documents with filters:", filters);
 	return new Promise((resolve) => {
 		setTimeout(() => {
-			let docs = DUMMY_ALL_DOCUMENTS;
+			let docs = DUMMY_ALL_DOCUMENTS.map((d) => ({
+				...d,
+				docIconName: getDocIconNameHelper(d.documentType),
+			})); // Ensure iconName is set
 			if (filters.status !== "all") {
 				docs = docs.filter((d) => d.status === filters.status);
 			}
@@ -124,12 +108,14 @@ const fetchAdminDocumentsAPI = async (filters: {
 	});
 };
 
-// Simulate Approve/Reject API
+// This API might not be used if cards are view-only on this screen
 const updateDocumentStatusAPI = async (
 	documentId: string,
 	newStatus: "approved" | "rejected"
 ): Promise<{ success: boolean }> => {
-	console.log(`Updating document ${documentId} to ${newStatus}`);
+	console.log(
+		`ADMIN: Updating document ${documentId} to ${newStatus} (Simulated)`
+	);
 	const docIndex = DUMMY_ALL_DOCUMENTS.findIndex((d) => d.id === documentId);
 	if (docIndex > -1) {
 		DUMMY_ALL_DOCUMENTS[docIndex].status = newStatus;
@@ -143,7 +129,17 @@ const updateDocumentStatusAPI = async (
 };
 // --- End Dummy Data ---
 
-// --- Reusable Components (Inline) ---
+// Helper for icon names
+const getDocIconNameHelper = (
+	docType: AdminDocumentInfo["documentType"]
+): keyof typeof MaterialIcons.glyphMap => {
+	if (docType.toLowerCase().includes("license")) return "credit-card";
+	if (docType.toLowerCase().includes("id")) return "badge";
+	if (docType.toLowerCase().includes("passport")) return "book";
+	return "article";
+};
+
+// --- Reusable Components (Themed) ---
 interface FilterTabButtonProps {
 	label: string;
 	isActive: boolean;
@@ -174,39 +170,58 @@ const FilterTabButton: React.FC<FilterTabButtonProps> = ({
 interface DocumentListItemCardProps {
 	item: AdminDocumentInfo;
 	onViewDocument: () => void;
-	onApprove?: () => void;
-	onReject?: () => void;
+	// onApprove and onReject props removed as per "admin only view document"
 }
 const DocumentListItemCard: React.FC<DocumentListItemCardProps> = ({
 	item,
 	onViewDocument,
-	onApprove,
-	onReject,
 }) => {
-	const statusStyles: Record<
-		Exclude<DocumentStatusAdmin, "all">,
-		{ badge: object; text: object }
-	> = {
-		approved: {
-			badge: styles.statusBadgeApproved,
-			text: styles.statusTextApproved,
-		},
-		pending: {
-			badge: styles.statusBadgePending,
-			text: styles.statusTextPending,
-		},
-		rejected: {
-			badge: styles.statusBadgeRejected,
-			text: styles.statusTextRejected,
-		},
+	const getStatusStyleInfo = (
+		status: Exclude<DocumentStatusAdmin, "all">
+	): {
+		badge: object;
+		text: object;
+		iconName: keyof typeof MaterialIcons.glyphMap;
+		iconColor: string;
+	} => {
+		switch (status) {
+			case "approved":
+				return {
+					badge: styles.statusBadgeApproved,
+					text: styles.statusTextSemantic,
+					iconName: "check-circle",
+					iconColor: colors.success,
+				};
+			case "pending":
+				return {
+					badge: styles.statusBadgePending,
+					text: styles.statusTextSemantic,
+					iconName: "hourglass-empty",
+					iconColor: colors.warning,
+				};
+			case "rejected":
+				return {
+					badge: styles.statusBadgeRejected,
+					text: styles.statusTextSemantic,
+					iconName: "cancel",
+					iconColor: colors.error,
+				};
+			default:
+				return {
+					badge: {},
+					text: {},
+					iconName: "help-outline",
+					iconColor: colors.textSecondary,
+				};
+		}
 	};
-	const currentStatusStyle = statusStyles[item.status] || {
-		badge: {},
-		text: {},
-	};
+	const currentStatusInfo = getStatusStyleInfo(item.status);
 
 	return (
-		<View style={styles.documentCard}>
+		<TouchableOpacity
+			style={styles.documentCard}
+			onPress={onViewDocument}
+			activeOpacity={0.8}>
 			<View style={styles.cardHeader}>
 				<View style={styles.userInfo}>
 					<Text style={styles.userNameText} numberOfLines={1}>
@@ -216,11 +231,17 @@ const DocumentListItemCard: React.FC<DocumentListItemCardProps> = ({
 						{item.userEmail}
 					</Text>
 				</View>
-				<View style={[styles.statusBadge, currentStatusStyle.badge]}>
+				<View style={[styles.statusBadge, currentStatusInfo.badge]}>
+					<MaterialIcons
+						name={currentStatusInfo.iconName}
+						size={12}
+						color={currentStatusInfo.iconColor}
+						style={{ marginRight: spacing.xs }}
+					/>
 					<Text
 						style={[
 							styles.statusBadgeText,
-							currentStatusStyle.text,
+							currentStatusInfo.text,
 						]}>
 						{item.status.charAt(0).toUpperCase() +
 							item.status.slice(1)}
@@ -228,27 +249,35 @@ const DocumentListItemCard: React.FC<DocumentListItemCardProps> = ({
 				</View>
 			</View>
 			<View style={styles.documentTypeRow}>
-				<Text style={styles.documentTypeIcon}>
-					{item.docIconPlaceholder}
-				</Text>
+				<MaterialIcons
+					name={item.docIconName}
+					size={20}
+					color={colors.iconDefault}
+					style={styles.documentTypeIconThemed}
+				/>
 				<Text style={styles.documentTypeText}>{item.documentType}</Text>
 			</View>
 			<View style={styles.timestampRow}>
-				<Text style={styles.timestampIcon}>🕒</Text>
+				<MaterialIcons
+					name="schedule"
+					size={16}
+					color={colors.iconDefault}
+					style={styles.timestampIconThemed}
+				/>
 				<Text style={styles.timestampText}>{item.submittedDate}</Text>
 			</View>
-			<View style={styles.cardActions}>
-				<TouchableOpacity
-					style={styles.viewButton}
-					onPress={onViewDocument}>
-					<Text style={styles.viewButtonText}>View Document</Text>
-				</TouchableOpacity>
-				{/* Approve/Reject buttons removed for Admin role */}
+			{/* Actions removed for view-only card on this list screen */}
+			<View style={styles.cardFooterActions}>
+				<Text style={styles.viewDetailsPromptText}>Tap to view</Text>
+				<MaterialIcons
+					name="arrow-forward-ios"
+					size={16}
+					color={colors.textPlaceholder}
+				/>
 			</View>
-		</View>
+		</TouchableOpacity>
 	);
 };
-// --- End Reusable ---
 
 type ScreenNavigationProp = StackNavigationProp<
 	AdminStackParamList,
@@ -270,7 +299,7 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 	const [isLoading, setIsLoading] = useState(true);
 	const [activeStatusFilter, setActiveStatusFilter] =
 		useState<DocumentStatusAdmin>(initialStatusFromRoute);
-	const [searchQuery, setSearchQuery] = useState(""); // For potential future search bar
+	const [searchQuery, setSearchQuery] = useState("");
 	const [showSearch, setShowSearch] = useState(false);
 
 	const loadDocuments = useCallback(
@@ -280,7 +309,12 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 				status,
 				searchQuery: query,
 			});
-			setDocuments(fetchedDocs);
+			setDocuments(
+				fetchedDocs.map((doc) => ({
+					...doc,
+					docIconName: getDocIconNameHelper(doc.documentType),
+				}))
+			); // Ensure iconName is mapped
 			setIsLoading(false);
 		},
 		[]
@@ -290,7 +324,6 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 		loadDocuments(activeStatusFilter, searchQuery);
 	}, [activeStatusFilter, searchQuery, loadDocuments]);
 
-	// Update header title and add search icon
 	useLayoutEffect(() => {
 		navigation.setOptions({
 			title: `${
@@ -301,18 +334,25 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 				<TouchableOpacity
 					onPress={() => setShowSearch((prev) => !prev)}
 					style={{ marginRight: spacing.m }}>
-					<Text style={{ fontSize: 22, color: colors.textPrimary }}>
-						{showSearch ? "✕" : "🔍"}
-					</Text>
+					<MaterialIcons
+						name={showSearch ? "close" : "search"}
+						size={24}
+						color={colors.iconWhite}
+					/>
 				</TouchableOpacity>
 			),
 		});
-	}, [navigation, activeStatusFilter, showSearch]);
+	}, [navigation, activeStatusFilter, showSearch, colors.iconWhite]);
 
-	const handleViewDocument = (docId: string, userName: string) => {
+	const handleViewDocument = (item: AdminDocumentInfo) => {
+		// Pass the whole item or required fields
 		navigation.navigate("AdminDocumentViewerScreen", {
-			documentId: docId,
-			userName,
+			documentId: item.id,
+			documentImageUrl: item.documentImageUrl, // Ensure this property exists or is handled in AdminDocumentInfo
+			userName: item.userName,
+			documentType: item.documentType,
+			status: item.status,
+			submittedDate: item.submittedDate,
 		});
 	};
 
@@ -326,7 +366,8 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 	if (isLoading && documents.length === 0) {
 		return (
 			<View style={styles.centered}>
-				<Text>Loading documents...</Text>
+				<ActivityIndicator size="large" color={colors.primary} />
+				<Text style={styles.loadingText}>Loading documents...</Text>
 			</View>
 		);
 	}
@@ -342,10 +383,10 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 						onChangeText={setSearchQuery}
 						placeholderTextColor={colors.textPlaceholder}
 						autoFocus
+						returnKeyType="search"
 					/>
 				</View>
 			)}
-			{/* Filter Tabs */}
 			<View style={styles.filterTabsRow}>
 				<ScrollView
 					horizontal
@@ -367,6 +408,11 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 
 			{documents.length === 0 && !isLoading ? (
 				<View style={styles.centered}>
+					<MaterialIcons
+						name="find-in-page"
+						size={48}
+						color={colors.textDisabled}
+					/>
 					<Text style={styles.noResultsText}>
 						No documents found for "{activeStatusFilter}" status.
 					</Text>
@@ -377,17 +423,21 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 					renderItem={({ item }) => (
 						<DocumentListItemCard
 							item={item}
-							onViewDocument={() =>
-								handleViewDocument(item.id, item.userName)
-							}
+							onViewDocument={() => handleViewDocument(item)}
 						/>
 					)}
 					keyExtractor={(item) => item.id}
 					contentContainerStyle={styles.listContentContainer}
 					showsVerticalScrollIndicator={false}
-					refreshing={isLoading}
-					onRefresh={() =>
-						loadDocuments(activeStatusFilter, searchQuery)
+					refreshControl={
+						<RefreshControl
+							refreshing={isLoading}
+							onRefresh={() =>
+								loadDocuments(activeStatusFilter, searchQuery)
+							}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
 					}
 				/>
 			)}
@@ -395,86 +445,90 @@ const AdminDocumentListScreen: React.FC<AdminDocumentListScreenProps> = ({
 	);
 };
 
-// Define your blue accent color in theme/colors.ts e.g. colors.adminAccentBlue
-const adminBlue = colors.primary; // Using primary green for now, change to blue
-
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		backgroundColor: colors.backgroundMain,
 	},
 	centered: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.l,
+		backgroundColor: colors.backgroundMain,
+	},
+	loadingText: {
+		marginTop: spacing.s,
+		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
 	},
 	searchBarContainer: {
 		paddingHorizontal: spacing.m,
 		paddingTop: spacing.s,
 		paddingBottom: spacing.m,
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard,
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
 	searchInput: {
-		backgroundColor: colors.backgroundLight || "#F0F3F7",
+		backgroundColor: colors.backgroundInput,
 		borderRadius: borderRadius.m,
 		paddingHorizontal: spacing.m,
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		height: 44,
 		color: colors.textPrimary,
 	},
 	filterTabsRow: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard,
 		paddingHorizontal: spacing.s,
 		paddingVertical: spacing.m,
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
 	filterTabsScroll: {
-		paddingHorizontal: spacing.m - spacing.s /* Align with list padding */,
+		paddingHorizontal: spacing.m - spacing.s,
 	},
 	filterTabButton: {
 		paddingVertical: spacing.s,
 		paddingHorizontal: spacing.l,
 		borderRadius: borderRadius.pill,
 		marginRight: spacing.s,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.backgroundInput,
 		borderWidth: 1,
 		borderColor: colors.borderDefault,
 	},
 	filterTabButtonActive: {
-		backgroundColor: colors.primaryLight,
+		backgroundColor: colors.primaryMuted,
 		borderColor: colors.primary,
 	},
 	filterTabButtonText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+		color: colors.textSecondary,
 	},
 	filterTabButtonTextActive: {
-		color: colors.primaryDark || colors.primary,
-		fontWeight: typography.fontWeights.bold,
+		color: colors.primary,
+		fontFamily: typography.primaryBold,
 	},
-	listContentContainer: { padding: spacing.m },
+	listContentContainer: {
+		padding: spacing.m,
+		flexGrow: 1,
+	},
 	noResultsText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
 		textAlign: "center",
+		marginTop: spacing.xl,
 	},
-
-	// DocumentListItemCard Styles
 	documentCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard,
 		borderRadius: borderRadius.l,
 		padding: spacing.m,
 		marginBottom: spacing.m,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.07,
-		shadowRadius: 3,
-		elevation: 2,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	cardHeader: {
 		flexDirection: "row",
@@ -485,41 +539,47 @@ const styles = StyleSheet.create({
 	userInfo: { flex: 1, marginRight: spacing.s },
 	userNameText: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
 		color: colors.textPrimary,
 	},
 	userEmailText: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 	},
 	statusBadge: {
-		paddingHorizontal: spacing.s,
-		paddingVertical: spacing.xxs + 1,
-		borderRadius: borderRadius.s,
-		alignSelf: "flex-start",
+		paddingHorizontal: spacing.m,
+		paddingVertical: spacing.s - spacing.xxs,
+		borderRadius: borderRadius.pill,
+		flexDirection: "row",
+		alignItems: "center",
+		minWidth: 90,
+		justifyContent: "center",
 	},
 	statusBadgeText: {
 		fontSize: typography.fontSizes.xs,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
+		textTransform: "capitalize",
 	},
-	statusBadgeApproved: { backgroundColor: "#D4EFDF" },
-	statusTextApproved: { color: "#1D8348" },
-	statusBadgePending: { backgroundColor: "#FDEBD0" },
-	statusTextPending: { color: "#A0522D" },
-	statusBadgeRejected: { backgroundColor: "#FFD6D6" },
-	statusTextRejected: { color: "#A93226" },
+	// Themed status badge styles
+	statusBadgeApproved: { backgroundColor: colors.successMuted },
+	statusTextApproved: { color: colors.success }, // Use bright semantic color for text on muted bg
+	statusBadgePending: { backgroundColor: colors.warningMuted },
+	statusTextPending: { color: colors.warning },
+	statusBadgeRejected: { backgroundColor: colors.errorMuted },
+	statusTextRejected: { color: colors.error },
+
 	documentTypeRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		marginVertical: spacing.xs,
 	},
-	documentTypeIcon: {
-		fontSize: 18,
-		color: colors.textMedium,
+	documentTypeIconThemed: {
 		marginRight: spacing.s,
 	},
 	documentTypeText: {
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		color: colors.textPrimary,
 	},
 	timestampRow: {
@@ -527,58 +587,32 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		marginBottom: spacing.s,
 	},
-	timestampIcon: {
-		fontSize: 14,
-		color: colors.textMedium,
+	timestampIconThemed: {
 		marginRight: spacing.s,
 	},
 	timestampText: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 	},
 	cardActions: {
+		// Modified for view-only prompt
 		borderTopWidth: StyleSheet.hairlineWidth,
-		borderTopColor: colors.borderDefault || "#F0F0F0",
-		paddingTop: spacing.m,
+		borderTopColor: colors.borderDefault,
+		paddingTop: spacing.s,
 		marginTop: spacing.s,
 		flexDirection: "row",
-		justifyContent: "space-between",
+		justifyContent: "flex-end", // Align prompt to the right
 		alignItems: "center",
 	},
-	viewButton: {
-		backgroundColor: adminBlue,
-		paddingVertical: spacing.s,
-		paddingHorizontal: spacing.l,
-		borderRadius: borderRadius.m,
-		flexShrink: 1,
-		marginRight: spacing.s,
-	},
-	viewButtonText: {
-		color: colors.white,
-		fontWeight: typography.fontWeights.semiBold,
-	},
-	approvalActions: { flexDirection: "row" },
-	approvalButton: {
-		borderRadius: borderRadius.m,
-		paddingVertical: spacing.s,
-		paddingHorizontal: spacing.m,
-		marginLeft: spacing.s,
-		borderWidth: 1,
-	},
-	approvalButtonText: {
-		fontWeight: typography.fontWeights.semiBold,
+	viewDetailsPromptText: {
+		// New style for "Tap to view"
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegularItalic,
+		color: colors.textPlaceholder,
+		marginRight: spacing.xs,
 	},
-	approveButton: {
-		backgroundColor: colors.successLight,
-		borderColor: colors.successDark,
-	},
-	approveButtonText: { color: colors.successDark },
-	rejectButton: {
-		backgroundColor: colors.errorLight,
-		borderColor: colors.errorDark,
-	},
-	rejectButtonText: { color: colors.errorDark },
+	// Removed viewButton, approvalActions, and related button styles as card is now view-only via direct tap
 });
 
 export default AdminDocumentListScreen;

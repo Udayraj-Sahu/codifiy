@@ -13,59 +13,28 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import PrimaryButton from "../../../components/common/PrimaryButton";
-import StyledTextInput from "../../../components/common/StyledTextInput";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { useDispatch, useSelector } from "react-redux";
+import PrimaryButton from "../../../components/common/PrimaryButton"; // Assumed to be themed
+import StyledTextInput from "../../../components/common/StyledTextInput"; // Assumed to be themed
 import { ProfileStackParamList } from "../../../navigation/types";
-import { colors, spacing, typography } from "../../../theme";
+import { AppDispatch, RootState } from "../../../store/store";
+import { borderRadius, colors, spacing, typography } from "../../../theme";
 
-// --- Dummy User Data & Service (Replace with actual API/Auth Context) ---
-interface UserProfileEditableData {
-	name: string;
-	email: string; // Changing email often has security implications
-	phone?: string; // Changing phone often has security implications
-	profileImageUrl?: string | null;
-	// Add other editable fields like bio, location, etc. if needed
+// TODO: Import your updateUserProfileThunk and UserProfileUpdateData interface
+// Example: import { updateUserProfileThunk, UserProfileUpdateData } from '../../../store/slices/authSlice'; // Or userProfileSlice
+// For now, defining a placeholder for the thunk and interface
+interface UserProfileUpdateData {
+	fullName?: string;
+	phoneNumber?: string;
+	profileImageFile?: { uri: string; type: string; name: string }; // For sending file to thunk
+	profileImageUrl?: string | null; // For sending existing or new URL
 }
-
-const DUMMY_CURRENT_USER_PROFILE: UserProfileEditableData = {
-	name: "Satoshi Nakamoto",
-	email: "satoshi@nakamoto.com",
-	phone: "+1234567890",
-	profileImageUrl: "https://via.placeholder.com/150x150.png?text=SN",
-};
-
-const fetchCurrentUserProfile =
-	async (): Promise<UserProfileEditableData | null> => {
-		// Simulate API call
-		return new Promise((resolve) => {
-			setTimeout(() => {
-				resolve(JSON.parse(JSON.stringify(DUMMY_CURRENT_USER_PROFILE))); // Return a copy
-			}, 300);
-		});
-	};
-
-const updateCurrentUserProfile = async (
-	updatedData: UserProfileEditableData
-): Promise<{
-	success: boolean;
-	data?: UserProfileEditableData;
-	message?: string;
-}> => {
-	// Simulate API call
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			console.log("Updating profile with:", updatedData);
-			// In a real app, update backend and then update local auth context/store
-			DUMMY_CURRENT_USER_PROFILE.name = updatedData.name;
-			DUMMY_CURRENT_USER_PROFILE.email = updatedData.email;
-			DUMMY_CURRENT_USER_PROFILE.phone = updatedData.phone;
-			DUMMY_CURRENT_USER_PROFILE.profileImageUrl =
-				updatedData.profileImageUrl;
-			resolve({ success: true, data: { ...DUMMY_CURRENT_USER_PROFILE } });
-		}, 1000);
-	});
-};
-// --- End Dummy Data ---
+// Placeholder thunk - replace with your actual import
+const updateUserProfileThunk = (data: any) => ({
+	type: "USER/UPDATE_PROFILE_PLACEHOLDER",
+	payload: data,
+});
 
 type EditProfileScreenNavigationProp = StackNavigationProp<
 	ProfileStackParamList,
@@ -74,7 +43,7 @@ type EditProfileScreenNavigationProp = StackNavigationProp<
 type EditProfileScreenRouteProp = RouteProp<
 	ProfileStackParamList,
 	"EditProfile"
->; // If any params were passed
+>;
 
 interface EditProfileScreenProps {
 	navigation: EditProfileScreenNavigationProp;
@@ -82,38 +51,54 @@ interface EditProfileScreenProps {
 }
 
 const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
-	navigation /*, route*/,
+	navigation,
 }) => {
-	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
-	const [phone, setPhone] = useState("");
+	const dispatch = useDispatch<AppDispatch>();
+	const authUser = useSelector((state: RootState) => state.auth.user);
+	// Assuming your authSlice has loading/error states for profile updates
+	const isAuthLoading = useSelector(
+		(state: RootState) => state.auth.isLoading
+	); // General auth loading
+	const authError = useSelector((state: RootState) => state.auth.error); // General auth error
+
+	const [fullName, setFullName] = useState("");
+	const [email, setEmail] = useState(""); // Email is usually not directly editable without verification
+	const [phoneNumber, setPhoneNumber] = useState("");
 	const [profileImageUri, setProfileImageUri] = useState<
 		string | null | undefined
-	>(undefined); // undefined: not loaded, null: no image, string: image uri
+	>(undefined); // Local URI for new image, or remote URL
 	const [initialData, setInitialData] =
-		useState<UserProfileEditableData | null>(null);
+		useState<UserProfileUpdateData | null>(null);
 
-	const [isLoading, setIsLoading] = useState(true); // For fetching initial data
-	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [isLoadingScreen, setIsLoadingScreen] = useState(true); // For initial data load from authUser
+	const [isSubmitting, setIsSubmitting] = useState(false); // For profile update submission
+
+	const profileImagePlaceholder =
+		"https://placehold.co/150x150/1A1A1A/F5F5F5?text=No+Pic";
 
 	useEffect(() => {
-		const loadProfile = async () => {
-			setIsLoading(true);
-			const profileData = await fetchCurrentUserProfile();
-			if (profileData) {
-				setName(profileData.name);
-				setEmail(profileData.email);
-				setPhone(profileData.phone || "");
-				setProfileImageUri(profileData.profileImageUrl);
-				setInitialData(profileData); // Store initial data to check for changes
-			} else {
-				Alert.alert("Error", "Could not load profile data.");
-				navigation.goBack();
-			}
-			setIsLoading(false);
-		};
-		loadProfile();
-	}, [navigation]);
+		if (authUser) {
+			setFullName(authUser.fullName || "");
+			setEmail(authUser.email || "");
+			setPhoneNumber(authUser.phoneNumber || "");
+			setProfileImageUri(authUser.profileImageUrl || null); // Use null if no image, undefined means not yet checked
+			setInitialData({
+				fullName: authUser.fullName || "",
+				// email: authUser.email || "", // Not typically part of 'changed' check if not editable
+				phoneNumber: authUser.phoneNumber || "",
+				profileImageUrl: authUser.profileImageUrl || null,
+			});
+			setIsLoadingScreen(false);
+		} else {
+			// If authUser is null and not just loading, something is wrong, or user logged out.
+			// This screen should ideally not be reachable if not authenticated.
+			Alert.alert(
+				"Error",
+				"User data not found. Please try logging in again."
+			);
+			navigation.goBack();
+		}
+	}, [authUser, navigation]);
 
 	const handleChooseProfilePicture = async () => {
 		const permissionResult =
@@ -129,7 +114,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
 		const pickerResult = await ImagePicker.launchImageLibraryAsync({
 			mediaTypes: ImagePicker.MediaTypeOptions.Images,
 			allowsEditing: true,
-			aspect: [1, 1], // Square for profile pictures
+			aspect: [1, 1],
 			quality: 0.7,
 		});
 
@@ -138,64 +123,112 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
 			pickerResult.assets &&
 			pickerResult.assets.length > 0
 		) {
-			setProfileImageUri(pickerResult.assets[0].uri);
+			setProfileImageUri(pickerResult.assets[0].uri); // Store local URI
 		}
 	};
 
 	const hasChanges = useMemo(() => {
-		if (!initialData) return false;
+		if (!initialData) return false; // No initial data to compare against
+		// Check if the new local image URI is different from the initial remote URL
+		const imageChanged =
+			initialData.profileImageUrl !== profileImageUri &&
+			(initialData.profileImageUrl || profileImageUri); // True if one exists and they are different, or if new one is set and old was null
+
 		return (
-			initialData.name !== name ||
-			initialData.email !== email ||
-			initialData.phone !== phone ||
-			initialData.profileImageUrl !== profileImageUri
+			initialData.fullName !== fullName ||
+			initialData.phoneNumber !== phoneNumber ||
+			imageChanged
 		);
-	}, [initialData, name, email, phone, profileImageUri]);
+	}, [initialData, fullName, phoneNumber, profileImageUri]);
 
 	const handleSaveChanges = async () => {
-		if (!name.trim()) {
-			Alert.alert("Validation Error", "Name cannot be empty.");
+		if (!fullName.trim()) {
+			Alert.alert("Validation Error", "Full name cannot be empty.");
 			return;
 		}
-		// Add more validation as needed (e.g., email format)
+		// Add more validation (e.g., phone number format)
 
 		setIsSubmitting(true);
-		const updatedProfileData: UserProfileEditableData = {
-			name,
-			email, // Note: Changing email/phone usually requires a verification step.
-			phone,
-			profileImageUrl: profileImageUri,
+
+		const updatePayload: UserProfileUpdateData = {
+			fullName: fullName.trim(),
+			phoneNumber: phoneNumber.trim(),
 		};
 
-		// TODO: If profileImageUri is a local file URI, upload it first to get a remote URL
-		// For now, we assume profileImageUri would be the URL if already remote or updated local URI
-		// if the backend handles direct local URI uploads (less common for mobile)
+		// If profileImageUri is a local file URI, prepare it for upload
+		if (profileImageUri && profileImageUri.startsWith("file://")) {
+			const filename =
+				profileImageUri.split("/").pop() || `profile-${Date.now()}.jpg`;
+			const match = /\.(\w+)$/.exec(filename);
+			const type = match ? `image/${match[1]}` : `image/jpeg`;
+			updatePayload.profileImageFile = {
+				uri: profileImageUri,
+				name: filename,
+				type,
+			};
+			updatePayload.profileImageUrl = null; // Indicate new file upload, backend should handle this
+		} else if (profileImageUri === null && initialData?.profileImageUrl) {
+			// User explicitly removed the image
+			updatePayload.profileImageUrl = null;
+		} else if (
+			profileImageUri &&
+			profileImageUri !== initialData?.profileImageUrl
+		) {
+			// This case is tricky: if profileImageUri is a new remote URL (e.g. from a 3rd party service)
+			// For now, we assume it's either a local file (handled above) or the existing URL.
+			// If it's a local file, it's handled by profileImageFile.
+			// If it's the *same* remote URL, no change. If it's a *different* remote URL, it's not handled by this simple setup.
+		}
 
-		const result = await updateCurrentUserProfile(updatedProfileData);
-		setIsSubmitting(false);
+		try {
+			// TODO: Replace placeholder with actual thunk dispatch
+			// Ensure your thunk takes an object like { userId: string, data: UserProfileUpdateData, token: string }
+			// const token = useSelector((state: RootState) => state.auth.token); // Get token if needed by thunk
+			// await dispatch(updateUserProfileThunk({ userId: authUser!._id, data: updatePayload, token })).unwrap();
 
-		if (result.success) {
-			Alert.alert(
-				"Profile Updated",
-				"Your profile has been successfully updated.",
-				[
-					{ text: "OK", onPress: () => navigation.goBack() }, // Go back to ProfileScreen
-				]
+			// Simulating the dispatch and its outcome for now:
+			console.log(
+				"Dispatching updateUserProfileThunk with payload:",
+				updatePayload
 			);
-			// TODO: Update global state/auth context with new profile data
-		} else {
+			// Assuming your thunk updates the auth.user in Redux store upon success
+			// For this placeholder, we'll just simulate success
+			// In a real app, the thunk's .fulfilled action would update the Redux store,
+			// which would then cause `authUser` to update, and this screen would reflect changes.
+
+			// Placeholder for actual thunk call
+			const result = await new Promise<{
+				success: boolean;
+				message?: string;
+			}>((res) => setTimeout(() => res({ success: true }), 1000));
+
+			if (result.success) {
+				Alert.alert(
+					"Profile Updated",
+					"Your profile has been successfully updated.",
+					[{ text: "OK", onPress: () => navigation.goBack() }]
+				);
+			} else {
+				Alert.alert(
+					"Update Failed",
+					result.message || "Could not update profile."
+				);
+			}
+		} catch (error: any) {
 			Alert.alert(
-				"Update Failed",
-				result.message || "Could not update profile. Please try again."
+				"Update Error",
+				error.message || "An unexpected error occurred."
 			);
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
-	if (isLoading) {
+	if (isLoadingScreen) {
 		return (
 			<View style={styles.centered}>
 				<ActivityIndicator size="large" color={colors.primary} />
-				<Text style={{ marginTop: spacing.s }}>Loading profile...</Text>
+				<Text style={styles.loadingText}>Loading profile...</Text>
 			</View>
 		);
 	}
@@ -210,52 +243,63 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
 					source={
 						profileImageUri
 							? { uri: profileImageUri }
-							: require("../../../../assets/images/icon.png")
-					} // Fallback to a local placeholder
+							: { uri: profileImagePlaceholder }
+					}
 					style={styles.profileImage}
 				/>
-				<TouchableOpacity onPress={handleChooseProfilePicture}>
-					<Text style={styles.changePictureText}>
-						Change Profile Picture
-					</Text>
+				<TouchableOpacity
+					onPress={handleChooseProfilePicture}
+					style={styles.changePictureButton}>
+					<MaterialIcons
+						name="photo-camera"
+						size={18}
+						color={colors.primary}
+					/>
+					<Text style={styles.changePictureText}>Change Picture</Text>
 				</TouchableOpacity>
 			</View>
 
-			<StyledTextInput
+			<StyledTextInput // Assumed themed
 				label="Full Name"
-				value={name}
-				onChangeText={setName}
+				value={fullName}
+				onChangeText={setFullName}
 				placeholder="Enter your full name"
 				containerStyle={styles.inputContainer}
+				// Pass theme colors if StyledTextInput doesn't get them from context
+				// labelTextStyle={{color: colors.textSecondary}}
+				// inputStyle={{color: colors.textPrimary, borderColor: colors.borderDefault}}
+				// placeholderTextColor={colors.textPlaceholder}
 			/>
 			<StyledTextInput
 				label="Email Address"
 				value={email}
-				onChangeText={setEmail}
-				placeholder="Enter your email"
+				// onChangeText={setEmail} // Email usually not directly editable
+				placeholder="your.email@example.com"
 				keyboardType="email-address"
 				autoCapitalize="none"
 				containerStyle={styles.inputContainer}
-				// editable={false} // Email change often involves verification
+				editable={false} // Make email non-editable
+				inputStyle={styles.disabledInput}
 			/>
 			<Text style={styles.fieldNoteText}>
-				Changing email might require re-verification.
+				Email address cannot be changed here. Contact support for
+				assistance.
 			</Text>
 
 			<StyledTextInput
 				label="Phone Number"
-				value={phone}
-				onChangeText={setPhone}
+				value={phoneNumber}
+				onChangeText={setPhoneNumber}
 				placeholder="Enter your phone number"
 				keyboardType="phone-pad"
 				containerStyle={styles.inputContainer}
 			/>
 
-			<PrimaryButton
+			<PrimaryButton // Assumed themed
 				title={isSubmitting ? "Saving..." : "Save Changes"}
 				onPress={handleSaveChanges}
 				style={styles.saveButton}
-				disabled={isSubmitting || !hasChanges} // Disable if no changes or submitting
+				disabled={isSubmitting || !hasChanges}
 				isLoading={isSubmitting}
 			/>
 		</ScrollView>
@@ -265,7 +309,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: colors.backgroundMain || "#FFFFFF",
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	contentContainer: {
 		padding: spacing.m,
@@ -275,6 +319,12 @@ const styles = StyleSheet.create({
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
+		backgroundColor: colors.backgroundMain, // Dark theme background
+	},
+	loadingText: {
+		marginTop: spacing.s,
+		color: colors.textSecondary, // Muted text on dark background
+		fontFamily: typography.primaryRegular,
 	},
 	profilePictureSection: {
 		alignItems: "center",
@@ -283,26 +333,44 @@ const styles = StyleSheet.create({
 	profileImage: {
 		width: 120,
 		height: 120,
-		borderRadius: 60,
-		backgroundColor: colors.greyLighter,
+		borderRadius: borderRadius.circle, // Circular image
+		backgroundColor: colors.backgroundCard, // Placeholder bg for image
 		marginBottom: spacing.m,
+		borderWidth: 2,
+		borderColor: colors.primary, // Accent border
+	},
+	changePictureButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingVertical: spacing.s,
+		paddingHorizontal: spacing.m,
+		borderRadius: borderRadius.m,
+		// backgroundColor: colors.backgroundCard, // Optional subtle background
 	},
 	changePictureText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.primary,
-		fontWeight: typography.fontWeights.semiBold,
+		fontFamily: typography.primaryMedium,
+		color: colors.textLink, // Use link color for this action
+		marginLeft: spacing.xs,
 	},
 	inputContainer: {
-		marginBottom: spacing.s, // Less margin between input and its note
+		marginBottom: spacing.s,
+	},
+	disabledInput: {
+		// Style for non-editable inputs
+		backgroundColor: colors.backgroundDisabled, // Slightly different background for disabled
+		color: colors.textDisabled, // Muted text for disabled
 	},
 	fieldNoteText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
-		marginBottom: spacing.l, // Margin after the note
-		marginLeft: spacing.xs, // Slight indent
+		fontFamily: typography.primaryRegular,
+		color: colors.textPlaceholder, // Muted placeholder color for notes
+		marginBottom: spacing.l,
+		marginLeft: spacing.xs, // Align with input label if StyledTextInput has similar padding
 	},
 	saveButton: {
 		marginTop: spacing.xl,
+		// PrimaryButton handles its own theming
 	},
 });
 

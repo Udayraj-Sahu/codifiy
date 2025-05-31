@@ -1,6 +1,6 @@
 // src/screens/App/Documents/DocumentUploadScreen.tsx
 import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useMemo, useState } from "react"; // Added useCallback
+import React, { useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -11,8 +11,9 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { useDispatch, useSelector } from "react-redux"; // Ensure useSelector is imported
-import PrimaryButton from "../../../components/common/PrimaryButton";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Import MaterialIcons
+import { useDispatch, useSelector } from "react-redux";
+import PrimaryButton from "../../../components/common/PrimaryButton"; // Assumed to be themed
 import { DocumentUploadScreenProps } from "../../../navigation/types";
 import {
 	clearUploadError,
@@ -20,7 +21,7 @@ import {
 	Document as StoreDocument,
 	uploadUserDocumentThunk,
 } from "../../../store/slices/documentSlice";
-import { AppDispatch, RootState } from "../../../store/store"; // Ensure RootState is imported
+import { AppDispatch, RootState } from "../../../store/store";
 
 import { borderRadius, colors, spacing, typography } from "../../../theme";
 
@@ -33,13 +34,13 @@ interface UploadedDocFile {
 
 interface DocumentSlotProps {
 	label: string;
-	docFile: UploadedDocFile | null; // Local selection
+	docFile: UploadedDocFile | null;
 	onPickDocument: () => void;
 	onRemoveDocument: () => void;
-	onUploadDocument: () => void; // New: specific upload for this slot
+	onUploadDocument: () => void;
 	isUploading: boolean;
 	uploadError?: string | null;
-	existingDocument?: StoreDocument | null; // Document from backend
+	existingDocument?: StoreDocument | null;
 }
 
 const DocumentSlot: React.FC<DocumentSlotProps> = ({
@@ -60,6 +61,9 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 		!isUploading &&
 		(!existingDocument || existingDocument.status === "rejected");
 
+	const placeholderImageUri =
+		"https://placehold.co/100x75/1A1A1A/F5F5F5?text=Doc"; // Dark theme placeholder
+
 	return (
 		<View style={styles.documentSlotContainer}>
 			<Text style={styles.slotLabel}>{label}</Text>
@@ -70,15 +74,23 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 							style={styles.uploadArea}
 							onPress={onPickDocument}
 							disabled={isUploading}>
-							<Text style={styles.uploadIconPlaceholder}>☁️</Text>
+							<MaterialIcons
+								name="cloud-upload"
+								size={36}
+								color={colors.primary}
+								style={{ marginBottom: spacing.s }}
+							/>
 							<Text style={styles.uploadAreaText}>
-								Tap to select {label.toLowerCase()}
+								Tap to select{" "}
+								{label
+									.toLowerCase()
+									.replace(" side of id/license", "")}
 							</Text>
 						</TouchableOpacity>
 				  )
 				: null}
 
-			{docFile && ( // Display locally selected file if present
+			{docFile && (
 				<View style={styles.uploadedFileContainer}>
 					<Image
 						source={{ uri: docFile.uri }}
@@ -95,20 +107,20 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 							</Text>
 						)}
 					</View>
-					{canPick &&
-						!isUploading && ( // Allow removal if not approved/pending and not uploading
-							<TouchableOpacity
-								onPress={onRemoveDocument}
-								style={styles.deleteButton}>
-								<Text style={styles.deleteIconPlaceholder}>
-									✕
-								</Text>
-							</TouchableOpacity>
-						)}
+					{canPick && !isUploading && (
+						<TouchableOpacity
+							onPress={onRemoveDocument}
+							style={styles.deleteButton}>
+							<MaterialIcons
+								name="close"
+								size={18}
+								color={colors.error}
+							/>
+						</TouchableOpacity>
+					)}
 				</View>
 			)}
 
-			{/* Display existing document from backend if no local file selected */}
 			{existingDocument && !docFile && (
 				<View
 					style={[
@@ -116,7 +128,10 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 						styles.existingDocInfo,
 					]}>
 					<Image
-						source={{ uri: existingDocument.fileUrl }}
+						source={{
+							uri:
+								existingDocument.fileUrl || placeholderImageUri,
+						}}
 						style={styles.fileThumbnail}
 					/>
 					<View style={styles.fileInfo}>
@@ -146,10 +161,16 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 								</Text>
 							)}
 					</View>
-					{existingDocument.status === "rejected" && (
+					{existingDocument.status === "rejected" && canPick && (
 						<TouchableOpacity
 							onPress={onPickDocument}
 							style={styles.reUploadButton}>
+							<MaterialIcons
+								name="file-upload"
+								size={16}
+								color={colors.warning}
+								style={{ marginRight: spacing.xs }}
+							/>
 							<Text style={styles.reUploadButtonText}>
 								Re-upload
 							</Text>
@@ -168,7 +189,7 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 				<Text
 					style={[
 						styles.errorText,
-						{ textAlign: "center", marginTop: spacing.xs },
+						{ textAlign: "center", marginTop: spacing.s },
 					]}>
 					{uploadError}
 				</Text>
@@ -176,11 +197,12 @@ const DocumentSlot: React.FC<DocumentSlotProps> = ({
 
 			{canUpload && (
 				<PrimaryButton
-					title={`Upload ${label.split(" ")[0]} Side`}
+					title={`Upload ${label.split(" ")[0]}`}
 					onPress={onUploadDocument}
 					isLoading={isUploading}
 					disabled={isUploading}
 					style={styles.individualUploadButton}
+					// PrimaryButton uses its own themed styles
 				/>
 			)}
 		</View>
@@ -192,14 +214,9 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 	route,
 }) => {
 	const dispatch = useDispatch<AppDispatch>();
-
-	const {
-		userDocuments,
-		isUploading, // This is the global 'isUploading' from the slice for any document operation
-		uploadError: globalUploadError, // This is the global 'uploadError' from the slice
-		// You might also have specific loading/error states for fetching userDocuments if needed
-	} = useSelector((state: RootState) => state.documents);
-
+	const { userDocuments, uploadError: globalUploadError } = useSelector(
+		(state: RootState) => state.documents
+	);
 	const { user } = useSelector((state: RootState) => state.auth);
 
 	const [docFrontFile, setDocFrontFile] = useState<UploadedDocFile | null>(
@@ -208,8 +225,6 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 	const [docBackFile, setDocBackFile] = useState<UploadedDocFile | null>(
 		null
 	);
-
-	// State for individual upload attempts for better UI feedback
 	const [isUploadingFront, setIsUploadingFront] = useState(false);
 	const [isUploadingBack, setIsUploadingBack] = useState(false);
 	const [frontUploadError, setFrontUploadError] = useState<string | null>(
@@ -218,12 +233,10 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 	const [backUploadError, setBackUploadError] = useState<string | null>(null);
 
 	useEffect(() => {
-		// Fetch user's existing documents when the screen loads or focuses
 		if (user?._id) {
-			// Ensure user is available
 			dispatch(fetchUserDocumentsThunk());
 		}
-		dispatch(clearUploadError()); // Clear any global upload error on screen load
+		dispatch(clearUploadError());
 	}, [dispatch, user?._id]);
 
 	const existingFrontDoc = useMemo(
@@ -258,7 +271,7 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 		) {
 			Alert.alert(
 				"Info",
-				`Your document (${docSide}) is already ${existingDoc.status}. No further action needed unless it was rejected.`
+				`Your document (${docSide}) is already ${existingDoc.status}.`
 			);
 			return;
 		}
@@ -268,15 +281,15 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 		if (!permissionResult.granted) {
 			Alert.alert(
 				"Permission Required",
-				"Media library access is required."
+				"Media library access is required to select a document."
 			);
 			return;
 		}
 		const pickerResult = await ImagePicker.launchImageLibraryAsync({
 			mediaTypes: ImagePicker.MediaTypeOptions.Images,
-			allowsEditing: true,
-			aspect: [4, 3],
-			quality: 0.7,
+			allowsEditing: true, // Consider allowing crop/edit
+			aspect: [16, 10], // Aspect ratio for driver's license might be closer to this
+			quality: 0.8, // Slightly higher quality
 		});
 
 		if (
@@ -286,7 +299,6 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 		) {
 			const asset = pickerResult.assets[0];
 			setFile({
-				// setDocFrontFile or setDocBackFile
 				uri: asset.uri,
 				fileName:
 					asset.fileName ||
@@ -296,7 +308,7 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 				fileSize: asset.fileSize,
 				type:
 					asset.mimeType ||
-					(asset.uri.endsWith(".png") ? "image/png" : "image/jpeg"), // Use mimeType, fallback to inferring
+					(asset.uri.endsWith(".png") ? "image/png" : "image/jpeg"),
 			});
 			if (docSide === "front") setFrontUploadError(null);
 			else setBackUploadError(null);
@@ -310,79 +322,75 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 		setSpecificError: React.Dispatch<React.SetStateAction<string | null>>
 	) => {
 		if (!docFile) {
-			Alert.alert("No Document", `Please select the ${docSide} side.`);
+			Alert.alert(
+				"No Document",
+				`Please select the ${docSide} side to upload.`
+			);
 			return;
 		}
-		console.log(
-			"DocumentUploadScreen: Uploading this file object:",
-			JSON.stringify(docFile, null, 2)
-		); // <<< ADD THIS LOG
 		if (!user) {
-			Alert.alert("Error", "User not authenticated.");
+			Alert.alert(
+				"Authentication Error",
+				"User not found. Please log in again."
+			);
 			return;
 		}
 
 		setIsSubmittingSpecific(true);
 		setSpecificError(null);
+		dispatch(clearUploadError()); // Clear global error before new attempt
 
 		try {
-			const resultAction = await dispatch(
+			await dispatch(
 				uploadUserDocumentThunk({
 					documentFile: {
 						uri: docFile.uri,
 						name: docFile.fileName,
 						type: docFile.type || "image/jpeg",
 					},
-					documentType: "drivers_license", // Or from a picker if you have multiple types
+					documentType: "drivers_license",
 					documentSide: docSide,
 				})
-			).unwrap(); // unwrap to catch rejected promise here
+			).unwrap();
 
-			// On successful individual upload, resultAction is the new Document object
 			Alert.alert(
 				"Upload Successful",
 				`${
 					docSide.charAt(0).toUpperCase() + docSide.slice(1)
-				} side submitted.`
+				} side submitted for review.`
 			);
-			if (docSide === "front") setDocFrontFile(null); // Clear local file
+			if (docSide === "front") setDocFrontFile(null);
 			else setDocBackFile(null);
 			// fetchUserDocumentsThunk is dispatched inside uploadUserDocumentThunk on success
 		} catch (rejectedValueOrSerializedError: any) {
-			// rejectedValueOrSerializedError is the string from rejectWithValue
-			setSpecificError(
-				rejectedValueOrSerializedError || "Upload failed."
-			);
-			Alert.alert(
-				"Upload Failed",
+			const errorMessage =
+				rejectedValueOrSerializedError?.message ||
 				rejectedValueOrSerializedError ||
-					`Could not upload ${docSide} side.`
-			);
+				"Upload failed. Please try again.";
+			setSpecificError(errorMessage);
+			Alert.alert("Upload Failed", errorMessage);
 		} finally {
 			setIsSubmittingSpecific(false);
 		}
 	};
 
-	// Determine overall screen status based on existing docs
 	let overallScreenStatusMessage =
-		"Please upload both front and back of your ID.";
-	if (
-		existingFrontDoc?.status === "pending" ||
-		existingBackDoc?.status === "pending"
-	) {
-		overallScreenStatusMessage = "Your document(s) are pending review.";
-	} else if (
-		existingFrontDoc?.status === "approved" &&
-		existingBackDoc?.status === "approved"
-	) {
+		"Please upload clear images of both front and back of your ID/License.";
+	const frontStatus = existingFrontDoc?.status;
+	const backStatus = existingBackDoc?.status;
+
+	if (frontStatus === "approved" && backStatus === "approved") {
 		overallScreenStatusMessage =
 			"Your documents are verified! You're all set.";
-	} else if (
-		existingFrontDoc?.status === "rejected" ||
-		existingBackDoc?.status === "rejected"
-	) {
+	} else if (frontStatus === "pending" || backStatus === "pending") {
 		overallScreenStatusMessage =
-			"One or more documents were rejected. Please re-upload.";
+			"Your document(s) are under review. This may take some time.";
+	} else if (frontStatus === "rejected" || backStatus === "rejected") {
+		overallScreenStatusMessage =
+			"One or both documents were rejected. Please review the reason and re-upload.";
+	} else if (existingFrontDoc || existingBackDoc) {
+		overallScreenStatusMessage =
+			"Please complete uploading both sides of your document for review.";
 	}
 
 	return (
@@ -392,7 +400,7 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 			<Text style={styles.title}>Verify Your ID</Text>
 			<Text style={styles.subtitle}>
 				Upload clear images of the front and back of your Driver's
-				License or Government ID.
+				License or other Government ID.
 			</Text>
 
 			<DocumentSlot
@@ -412,7 +420,6 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 					)
 				}
 				isUploading={isUploadingFront}
-				// Ensure 'globalUploadError' is used here as destructured from useSelector
 				uploadError={
 					frontUploadError ||
 					(globalUploadError && docFrontFile
@@ -439,7 +446,6 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 					)
 				}
 				isUploading={isUploadingBack}
-				// Ensure 'globalUploadError' is used here as destructured from useSelector
 				uploadError={
 					backUploadError ||
 					(globalUploadError && docBackFile
@@ -450,25 +456,56 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 			/>
 
 			<View style={styles.overallStatusBox}>
+				<MaterialIcons
+					name={
+						frontStatus === "approved" && backStatus === "approved"
+							? "check-circle"
+							: frontStatus === "rejected" ||
+							  backStatus === "rejected"
+							? "error"
+							: frontStatus === "pending" ||
+							  backStatus === "pending"
+							? "hourglass-empty"
+							: "info"
+					}
+					size={24}
+					color={
+						frontStatus === "approved" && backStatus === "approved"
+							? colors.success
+							: frontStatus === "rejected" ||
+							  backStatus === "rejected"
+							? colors.error
+							: frontStatus === "pending" ||
+							  backStatus === "pending"
+							? colors.warning
+							: colors.info
+					}
+					style={{ marginBottom: spacing.s }}
+				/>
 				<Text style={styles.overallStatusText}>
 					{overallScreenStatusMessage}
 				</Text>
 			</View>
 
 			<View style={styles.tipsContainer}>
-				<Text style={styles.tipsIconPlaceholder}>💡</Text>
+				<MaterialIcons
+					name="lightbulb-outline"
+					size={24}
+					color={colors.warning}
+					style={styles.tipsIcon}
+				/>
 				<View style={styles.tipsTextContainer}>
 					<Text style={styles.tipsTitle}>
 						Tips for quick approval:
 					</Text>
 					<Text style={styles.tipItem}>
-						• Ensure all corners are visible.
+						• Ensure all document corners are visible.
 					</Text>
 					<Text style={styles.tipItem}>
-						• Good lighting, no blur, no glare.
+						• Use good lighting, avoid blur and glare.
 					</Text>
 					<Text style={styles.tipItem}>
-						• Use original, valid documents.
+						• Upload original, valid, and clear documents.
 					</Text>
 				</View>
 			</View>
@@ -480,178 +517,197 @@ const DocumentUploadScreen: React.FC<DocumentUploadScreenProps> = ({
 						screen: "ContactSupportScreen",
 					})
 				}>
-				<Text style={styles.helpLinkText}>Help & Support</Text>
+				<Text style={styles.helpLinkText}>
+					Need Help? Contact Support
+				</Text>
 			</TouchableOpacity>
 		</ScrollView>
 	);
 };
 
-// Styles
 const styles = StyleSheet.create({
-	screenContainer: { flex: 1, backgroundColor: colors.white },
-	scrollContentContainer: { padding: spacing.m, paddingBottom: spacing.xxl },
+	screenContainer: {
+		flex: 1,
+		backgroundColor: colors.backgroundMain, // Dark theme background
+	},
+	scrollContentContainer: {
+		padding: spacing.m,
+		paddingBottom: spacing.xxl,
+	},
 	title: {
-		fontSize: typography.fontSizes.xxxl - 2,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
-		marginBottom: spacing.xs,
+		fontSize: typography.fontSizes.xxxl, // Kept large as it's a primary screen title
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary, // Light text
+		marginBottom: spacing.s, // Adjusted margin
 		textAlign: "center",
 	},
 	subtitle: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted text
 		marginBottom: spacing.xl,
 		textAlign: "center",
+		paddingHorizontal: spacing.s, // Add some horizontal padding for multi-line text
 	},
 	documentSlotContainer: {
-		marginBottom: spacing.xl, // More space between slots
-		padding: spacing.s,
+		marginBottom: spacing.xl,
+		padding: spacing.m, // Increased padding for the slot
 		borderWidth: 1,
-		borderColor: colors.borderDefault,
-		borderRadius: borderRadius.m,
+		borderColor: colors.borderDefault, // Themed border
+		borderRadius: borderRadius.l, // Larger radius for distinct slots
+		backgroundColor: colors.backgroundCard, // Dark card background
 	},
 	slotLabel: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.semiBold,
+		fontFamily: typography.primarySemiBold,
 		color: colors.textPrimary,
 		marginBottom: spacing.m,
 	},
 	uploadArea: {
 		borderWidth: 2,
-		borderColor: colors.primary,
+		borderColor: colors.primary, // Accent color border
 		borderStyle: "dashed",
-		borderRadius: borderRadius.l,
+		borderRadius: borderRadius.m, // Standard radius
 		paddingVertical: spacing.xl,
 		paddingHorizontal: spacing.l,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: colors.primaryVeryLight || "#F0FFF0",
+		backgroundColor: colors.backgroundMain, // Slightly different from card for depth
 		minHeight: 150,
-	},
-	uploadIconPlaceholder: {
-		fontSize: 36,
-		color: colors.primary,
-		marginBottom: spacing.s,
 	},
 	uploadAreaText: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.medium,
-		color: colors.primaryDark || colors.primary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted text
 		textAlign: "center",
-		marginBottom: spacing.xs,
+		marginTop: spacing.xs, // Spacing from icon
 	},
 	uploadedFileContainer: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: colors.backgroundLight || "#F0F0F0",
+		backgroundColor: colors.backgroundMain, // Darker inner area
 		borderRadius: borderRadius.m,
-		padding: spacing.s, // Reduced padding for a tighter look
+		padding: spacing.s,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	existingDocInfo: {
-		// Slightly different style for already uploaded docs
-		backgroundColor: colors.greyLightest,
-		padding: spacing.m,
+		backgroundColor: colors.backgroundCard, // Consistent card background
+		padding: spacing.m, // More padding for existing docs
 	},
 	fileThumbnail: {
 		width: 80,
 		height: 60,
 		borderRadius: borderRadius.s,
 		marginRight: spacing.m,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.borderDefault, // Placeholder bg for thumbnail
 	},
 	fileInfo: { flex: 1 },
 	fileName: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
 		color: colors.textPrimary,
 	},
-	fileSize: { fontSize: typography.fontSizes.s, color: colors.textSecondary },
+	fileSize: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+	},
 	deleteButton: {
 		padding: spacing.s,
 		marginLeft: spacing.s,
-		backgroundColor: colors.errorLight,
-		borderRadius: borderRadius.pill,
+		// backgroundColor: 'transparent', // No background, just icon
+		borderRadius: borderRadius.circle,
 	},
-	deleteIconPlaceholder: { fontSize: 18, color: colors.error },
+	// deleteIconPlaceholder removed, using MaterialIcons now
 	reUploadButton: {
-		paddingVertical: spacing.xs,
-		paddingHorizontal: spacing.s,
-		backgroundColor: colors.warningLight,
-		borderRadius: borderRadius.s,
-		marginLeft: spacing.s,
+		paddingVertical: spacing.s,
+		paddingHorizontal: spacing.m,
+		backgroundColor: colors.backgroundCard, // Use card bg for less emphasis
+		borderRadius: borderRadius.m,
+		borderWidth: 1,
+		borderColor: colors.warning, // Warning color border
+		marginLeft: "auto", // Push to the right if space allows, or use flex end on parent
+		marginTop: spacing.s,
+		flexDirection: "row",
+		alignItems: "center",
 	},
 	reUploadButtonText: {
-		color: colors.warningDark,
-		fontSize: typography.fontSizes.xs,
+		color: colors.warning, // Warning color text
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryMedium,
 	},
 	individualUploadButton: {
+		// This is for the PrimaryButton instance
 		marginTop: spacing.m,
-		backgroundColor: colors.primary,
+		// PrimaryButton handles its own theming (bg, text color)
 	},
 	overallStatusBox: {
 		marginVertical: spacing.l,
 		padding: spacing.m,
-		backgroundColor: colors.infoLight,
+		backgroundColor: colors.backgroundCard, // Dark card background
 		borderRadius: borderRadius.m,
 		alignItems: "center",
+		borderLeftWidth: 4, // Add a colored indicator border
+		// Border color set dynamically below based on status
 	},
 	overallStatusText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.infoDark,
+		color: colors.textPrimary, // Primary text color
 		textAlign: "center",
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryRegular,
 	},
-	statusText: { fontSize: typography.fontSizes.s, marginTop: spacing.xxs },
-	statusApproved: { color: colors.successDark, fontWeight: "bold" },
-	statusPending: { color: colors.warningDark, fontWeight: "bold" },
-	statusRejected: { color: colors.errorDark, fontWeight: "bold" },
-	errorText: {
-		color: colors.error,
+	statusText: {
+		// For specific status text inside DocumentSlot for existing docs
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular, // Regular weight for status
+		marginTop: spacing.xxs,
+	},
+	statusApproved: { color: colors.success }, // Light green on dark theme
+	statusPending: { color: colors.warning }, // Light yellow/orange on dark theme
+	statusRejected: { color: colors.error }, // Light red on dark theme
+	errorText: {
+		color: colors.textError, // Use theme error color
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		marginTop: spacing.xs,
 	},
 	errorTextSmall: {
-		color: colors.error,
+		color: colors.textError,
 		fontSize: typography.fontSizes.xs,
+		fontFamily: typography.primaryRegular,
 		marginTop: spacing.xxs,
-	},
-	infoText: {
-		color: colors.infoDark,
-		fontSize: typography.fontSizes.s,
-		fontStyle: "italic",
-		marginTop: spacing.xs,
-	},
-	successText: {
-		color: colors.successDark,
-		fontSize: typography.fontSizes.s,
-		fontWeight: "bold",
-		marginTop: spacing.xs,
 	},
 	tipsContainer: {
 		flexDirection: "row",
-		backgroundColor: colors.warningLight || "#FFF9E6",
+		backgroundColor: colors.backgroundCard, // Dark card background
 		borderRadius: borderRadius.m,
 		padding: spacing.m,
 		marginBottom: spacing.xl,
 		marginTop: spacing.m,
+		borderLeftWidth: 4,
+		borderLeftColor: colors.info, // Info color for tips
 	},
-	tipsIconPlaceholder: {
-		fontSize: 20,
-		color: colors.warningDark || colors.warning,
+	tipsIcon: {
+		// Replaced emoji placeholder
 		marginRight: spacing.m,
 		marginTop: spacing.xxs,
 	},
 	tipsTextContainer: { flex: 1 },
 	tipsTitle: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.warningDark || colors.warning,
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary, // Use primary text, icon provides semantic color
 		marginBottom: spacing.xs,
 	},
 	tipItem: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
-		lineHeight: typography.fontSizes.s * 1.5,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted text for tips
+		lineHeight: typography.lineHeights.getForSize(
+			typography.fontSizes.s,
+			"body"
+		),
 		marginBottom: spacing.xxs,
 	},
 	helpLinkContainer: {
@@ -660,9 +716,9 @@ const styles = StyleSheet.create({
 		marginTop: spacing.s,
 	},
 	helpLinkText: {
-		color: colors.primary,
+		color: colors.textLink, // Use theme link color
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
 		textDecorationLine: "underline",
 	},
 });

@@ -88,3 +88,57 @@ export const verifyPaymentAPI = async (
     });
     return handleBookingResponse(response);
 };
+export const callApiToFetchBookingDetails = async (bookingId: string): Promise<RawBookingDataFromAPI> => {
+    // TODO: Replace with your actual API base URL and endpoint structure
+ // EXAMPLE - REPLACE THIS
+    const endpoint = `${API_BASE_URL}/bookings/${bookingId}`; // EXAMPLE - ADJUST AS NEEDED
+
+    console.log(`[API Call] Fetching booking details from: ${endpoint}`);
+
+    try {
+        // TODO: Retrieve your auth token if needed (e.g., from Redux state or AsyncStorage)
+        // const authToken = store.getState().auth.token; // Example if token is in Redux store
+        const authToken = null; // Placeholder
+
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+        };
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: headers,
+        });
+
+        if (!response.ok) {
+            let errorData;
+            try {
+                errorData = await response.json(); // Try to parse error response from API
+            } catch (e) {
+                // If response is not JSON or empty
+                errorData = { message: response.statusText || `HTTP error! Status: ${response.status}` };
+            }
+            // Throw an error that includes a message and potentially the status
+            const error = new Error(errorData.message || `Failed to fetch booking. Status: ${response.status}`) as any;
+            error.status = response.status; // Attach status to error object if needed
+            error.data = errorData;         // Attach full error data if needed
+            throw error;
+        }
+
+        const data: RawBookingDataFromAPI = await response.json();
+        console.log("[API Call] Successfully fetched booking details:", data);
+        return data; // This is the raw data from your API
+
+    } catch (error: any) {
+        console.error("[API Call] Failed to fetch booking details:", error.message);
+        // Re-throw the error so createAsyncThunk can catch it and dispatch the .rejected action
+        // Ensure the error has a 'message' property for rejectWithValue
+        if (error.message) {
+            throw error;
+        } else {
+            throw new Error('An unknown network error occurred.');
+        }
+    }
+};

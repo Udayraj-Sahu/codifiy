@@ -3,7 +3,7 @@ import { RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
-	ActivityIndicator, // To get screen dimensions for image
+	ActivityIndicator,
 	Alert,
 	Dimensions,
 	Image,
@@ -14,69 +14,125 @@ import {
 	TextStyle,
 	View,
 } from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Added
+import { useDispatch, useSelector } from "react-redux"; // Added
 import {
 	DocumentStatusOwner,
 	OwnerStackParamList,
-} from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
-// For image zoom/pan, consider libraries like 'react-native-image-zoom-viewer' or 'react-native-photo-view'.
+} from "../../navigation/types";
+import { AppDispatch, RootState } from "../../store/store"; // Added
+import { borderRadius, colors, spacing, typography } from "../../theme";
 
-// --- Dummy Data / Types (similar to AdminDocumentViewerScreen) ---
+// TODO: Replace with your actual document slice imports
+// Example:
+// import {
+//  fetchOwnerDocumentDetailsByIdThunk,
+//  clearCurrentOwnerDocumentDetail,
+//  OwnerViewDocumentDetails // This type should come from your slice or a shared types file
+// } from "../../../store/slices/ownerDocumentSlice"; // Or your existing documentSlice
+
+// --- Types (Keep or import from your slice) ---
 interface OwnerViewDocumentDetails {
-	id?: string; // May not always have ID if URL is direct
+	id?: string;
 	imageUrl: string;
 	userName: string;
 	documentType: string;
-	submittedDate?: string; // Could be passed or fetched
+	submittedDate?: string;
 	status: Exclude<DocumentStatusOwner, "all">;
+	// Add other fields like userEmail, documentSide if needed for display
 }
+// --- End Types ---
 
-// Simulate fetching if only ID is passed, or if more details are needed
-const fetchOwnerDocumentDetailsAPI = async (
-	documentId: string
-): Promise<OwnerViewDocumentDetails | null> => {
-	console.log(`OWNER: Fetching details for document ID: ${documentId}`);
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			// Example: Find in a larger dummy dataset or construct
-			if (documentId === "dl123") {
-				// Corresponds to Sarah Johnson's DL from DocumentApprovalList
-				resolve({
-					id: "dl123",
-					imageUrl:
-						"https://via.placeholder.com/800x600.png?text=Sarah+J+DL",
-					userName: "Sarah Johnson",
-					documentType: "Driving License",
-					submittedDate: "Today, 2:30 PM",
-					status: "approved",
-				});
-			} else if (documentId === "id456") {
-				// Corresponds to Michael Chen's ID
-				resolve({
-					id: "id456",
-					imageUrl:
-						"https://via.placeholder.com/800x600.png?text=Michael+C+ID",
-					userName: "Michael Chen",
-					documentType: "ID Proof",
-					submittedDate: "Today, 11:45 AM",
-					status: "pending",
-				});
-			} else {
-				// Fallback if ID doesn't match specific known ones
-				resolve({
-					id: documentId,
-					imageUrl:
-						"https://via.placeholder.com/800x600.png?text=Document+" +
-						documentId,
-					userName: "Unknown User",
-					documentType: "Unknown Document",
-					status: "pending", // Default status
-				});
-			}
-		}, 300);
-	});
+// --- Placeholder Thunk (Replace with actual import) ---
+const fetchOwnerDocumentDetailsByIdThunk = (documentId: string) => ({
+	type: "ownerDocuments/fetchDetailsById/placeholder",
+	payload: documentId,
+	asyncThunk: async (dispatch: AppDispatch) => {
+		dispatch({
+			type: "ownerDocuments/fetchDetailsById/pending",
+			meta: { arg: documentId },
+		});
+		console.log(
+			`Simulating fetch for owner document details: ${documentId}`
+		);
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+		// Simulate API response
+		const DUMMY_DETAILS_SOURCE: {
+			[key: string]: OwnerViewDocumentDetails;
+		} = {
+			dl123: {
+				id: "dl123",
+				imageUrl:
+					"https://placehold.co/800x600/1A1A1A/F5F5F5?text=Sarah+J+DL+Dark",
+				userName: "Sarah Johnson",
+				documentType: "Driving License",
+				submittedDate: "May 30, 2025, 2:30 PM",
+				status: "approved",
+			},
+			id456: {
+				id: "id456",
+				imageUrl:
+					"https://placehold.co/800x600/1A1A1A/F5F5F5?text=Michael+C+ID+Dark",
+				userName: "Michael Chen",
+				documentType: "ID Proof",
+				submittedDate: "May 30, 2025, 11:45 AM",
+				status: "pending",
+			},
+		};
+		const fetchedData = DUMMY_DETAILS_SOURCE[documentId] || null;
+		if (fetchedData) {
+			dispatch({
+				type: "ownerDocuments/fetchDetailsById/fulfilled",
+				payload: fetchedData,
+				meta: { arg: documentId },
+			});
+		} else {
+			dispatch({
+				type: "ownerDocuments/fetchDetailsById/rejected",
+				error: {
+					message: "Document details not found for owner view.",
+				},
+				meta: { arg: documentId },
+			});
+		}
+		return fetchedData;
+	},
+});
+// const clearCurrentOwnerDocumentDetail = () => ({ type: 'ownerDocuments/clearCurrentDetails/placeholder' });
+// --- End Placeholder Thunk ---
+
+// Helper to render detail rows with icons
+const DetailRow: React.FC<{
+	label: string;
+	value?: string | number | null;
+	valueStyle?: StyleProp<TextStyle>;
+	children?: React.ReactNode;
+	iconName?: keyof typeof MaterialIcons.glyphMap; // Use MaterialIcons names
+}> = ({ label, value, valueStyle, children, iconName }) => {
+	if ((value === undefined || value === null || value === "") && !children)
+		return null;
+	return (
+		<View style={styles.detailRow}>
+			<View style={styles.detailLabelContainer}>
+				{iconName && (
+					<MaterialIcons
+						name={iconName}
+						size={18}
+						color={colors.iconDefault}
+						style={styles.detailRowIcon}
+					/>
+				)}
+				<Text style={styles.detailLabel}>{label}:</Text>
+			</View>
+			{value !== undefined && value !== null && (
+				<Text style={[styles.detailValue, valueStyle]}>
+					{String(value)}
+				</Text>
+			)}
+			{children}
+		</View>
+	);
 };
-// --- End Dummy Data ---
 
 type ScreenRouteProp = RouteProp<
 	OwnerStackParamList,
@@ -91,61 +147,47 @@ interface OwnerDocumentViewerScreenProps {
 	route: ScreenRouteProp;
 	navigation: ScreenNavigationProp;
 }
-interface DetailRowProps {
-	label: string;
-	value?: string | number | null;
-	valueStyle?: StyleProp<TextStyle>; // Changed from object to StyleProp<TextStyle>
-	children?: React.ReactNode;
-	iconPlaceholder?: string;
-}
-const DetailRow: React.FC<DetailRowProps> = ({
-	label,
-	value,
-	valueStyle,
-	children,
-	iconPlaceholder,
-}) => {
-	// Render null if no value and no children to avoid empty rows, unless a label always needs to show.
-	if ((value === undefined || value === null || value === "") && !children) {
-		// If you always want to show the label even if value is empty, remove this check or adjust.
-		// For now, if value and children are absent, don't render the row.
-		// return null;
-	}
-	return (
-		<View style={styles.detailRow}>
-			<View style={styles.detailLabelContainer}>
-				{iconPlaceholder && (
-					<Text style={styles.detailRowIcon}>{iconPlaceholder}</Text>
-				)}
-				<Text style={styles.detailLabel}>{label}:</Text>
-			</View>
-			{value !== undefined && value !== null && (
-				<Text style={[styles.detailValue, valueStyle]}>{value}</Text>
-			)}
-			{children}
-		</View>
-	);
-};
 
 const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 	route,
 	navigation,
 }) => {
 	const {
-		documentId,
+		documentId, // This ID should be used to fetch details if not all data is passed
 		documentImageUrl: passedImageUrl,
 		userName: passedUserName,
 		documentType: passedDocumentType,
 		status: passedStatus,
 	} = route.params || {};
 
+	const dispatch = useDispatch<AppDispatch>();
+
+	// TODO: Replace with actual selectors from your document/ownerDocument slice
+	const docDetailsFromState = useSelector(
+		(state: RootState) =>
+			(state as any).documents
+				?.currentOwnerDocumentDetail as OwnerViewDocumentDetails | null
+	);
+	const isLoadingFromState = useSelector(
+		(state: RootState) =>
+			(state as any).documents?.isLoadingOwnerDocumentDetail as boolean
+	);
+	const errorFromState = useSelector(
+		(state: RootState) =>
+			(state as any).documents?.errorOwnerDocumentDetail as string | null
+	);
+	// --- End Redux Selectors Placeholder ---
+
 	const [docDetails, setDocDetails] =
 		useState<OwnerViewDocumentDetails | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [imageDisplayDimensions, setImageDisplayDimensions] = useState({
-		width: Dimensions.get("window").width - spacing.m * 2, // Initial width
-		height: 250, // Initial default height
+		width: Dimensions.get("window").width - spacing.m * 2,
+		height: 250, // Default height
 	});
+	const screenWidth = Dimensions.get("window").width - spacing.m * 2; // For image sizing
+	const imagePlaceholderUri =
+		"https://placehold.co/800x600/1A1A1A/F5F5F5?text=Document";
 
 	useLayoutEffect(() => {
 		const title = docDetails?.userName
@@ -167,26 +209,20 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 				passedDocumentType &&
 				passedStatus
 			) {
+				// If all necessary details are passed via route params, use them directly
 				details = {
-					id: documentId,
+					id: documentId, // documentId might still be useful for other actions
 					imageUrl: passedImageUrl,
 					userName: passedUserName,
 					documentType: passedDocumentType,
 					status: passedStatus,
-					// submittedDate could also be passed
+					submittedDate: route.params?.submittedDate, // If passed
 				};
-			} else if (documentId) {
-				details = await fetchOwnerDocumentDetailsAPI(documentId);
-			}
-
-			if (details) {
 				setDocDetails(details);
 				if (details.imageUrl) {
 					Image.getSize(
 						details.imageUrl,
 						(width, height) => {
-							const screenWidth =
-								Dimensions.get("window").width - spacing.m * 2;
 							const scaleFactor = width / screenWidth;
 							const imageHeight = height / scaleFactor;
 							setImageDisplayDimensions({
@@ -196,28 +232,76 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 						},
 						(error) => {
 							console.error(
-								"Failed to get image size for OwnerDocumentViewer:",
+								"Failed to get image size (passed URL):",
 								error
 							);
-							// Keep default/initial image dimensions or show placeholder for image
 							setImageDisplayDimensions({
 								width: screenWidth,
 								height: 250,
-							}); // Fallback height
+							}); // Fallback
 						}
 					);
 				}
-			} else {
-				Alert.alert(
-					"Error",
-					"Document information incomplete or not found.",
-					[{ text: "OK", onPress: () => navigation.goBack() }]
+				setIsLoading(false);
+			} else if (documentId) {
+				// If only documentId is passed, fetch details using thunk
+				// @ts-ignore // Placeholder for actual thunk dispatch
+				const actionResult = await dispatch(
+					fetchOwnerDocumentDetailsByIdThunk(documentId).asyncThunk(
+						dispatch
+					)
 				);
+				// TODO: Replace placeholder with actual thunk result handling:
+				// const actionResult = await dispatch(fetchOwnerDocumentDetailsByIdThunk(documentId));
+				// if (fetchOwnerDocumentDetailsByIdThunk.fulfilled.match(actionResult)) {
+				//  const fetchedData = actionResult.payload as OwnerViewDocumentDetails;
+				//  setDocDetails(fetchedData);
+				//  if (fetchedData.imageUrl) Image.getSize(...);
+				// } else {
+				//  Alert.alert("Error", "Could not load document details.");
+				// }
+				// For placeholder:
+				if (actionResult) {
+					setDocDetails(actionResult as OwnerViewDocumentDetails);
+					if ((actionResult as OwnerViewDocumentDetails).imageUrl) {
+						Image.getSize(
+							(actionResult as OwnerViewDocumentDetails).imageUrl,
+							(width, height) => {
+								const scaleFactor = width / screenWidth;
+								const imageHeight = height / scaleFactor;
+								setImageDisplayDimensions({
+									width: screenWidth,
+									height: imageHeight,
+								});
+							},
+							(error) => {
+								console.error(
+									"Failed to get image size (fetched URL):",
+									error
+								);
+								setImageDisplayDimensions({
+									width: screenWidth,
+									height: 250,
+								});
+							}
+						);
+					}
+				} else {
+					Alert.alert("Error", "Document not found.", [
+						{ text: "OK", onPress: () => navigation.goBack() },
+					]);
+				}
+				setIsLoading(false);
+			} else {
+				Alert.alert("Error", "Document information incomplete.", [
+					{ text: "OK", onPress: () => navigation.goBack() },
+				]);
+				setIsLoading(false);
 			}
-			setIsLoading(false);
 		};
 
 		loadDocument();
+		// TODO: return () => dispatch(clearCurrentOwnerDocumentDetail()); // On unmount
 	}, [
 		documentId,
 		passedImageUrl,
@@ -225,6 +309,9 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 		passedDocumentType,
 		passedStatus,
 		navigation,
+		dispatch,
+		screenWidth,
+		route.params?.submittedDate,
 	]);
 
 	if (isLoading) {
@@ -236,24 +323,51 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 		);
 	}
 
+	// Use errorFromState if you integrate Redux loading/error states fully
+	// if (errorFromState) { ... }
+
 	if (!docDetails) {
 		return (
 			<View style={styles.centered}>
+				<MaterialIcons
+					name="find-in-page"
+					size={48}
+					color={colors.textDisabled}
+				/>
 				<Text style={styles.errorText}>
 					Could not display document details.
 				</Text>
+				<PrimaryButton
+					title="Go Back"
+					onPress={() => navigation.goBack()}
+				/>
 			</View>
 		);
 	}
 
-	const statusColor =
+	const getStatusColor = (status: RideStatus): string => {
+		switch (status) {
+			case "Active": // Assuming 'approved' for documents
+			case "approved":
+				return colors.success;
+			case "Upcoming": // Assuming 'pending' for documents
+			case "pending":
+				return colors.warning;
+			case "Cancelled": // Assuming 'rejected' for documents
+			case "rejected":
+				return colors.error;
+			default:
+				return colors.textSecondary;
+		}
+	};
+	const statusIconName =
 		docDetails.status === "approved"
-			? colors.success
+			? "check-circle"
 			: docDetails.status === "pending"
-			? colors.warning
+			? "hourglass-empty"
 			: docDetails.status === "rejected"
-			? colors.error
-			: colors.textMedium;
+			? "cancel"
+			: "help-outline";
 
 	return (
 		<ScrollView
@@ -261,10 +375,15 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 			contentContainerStyle={styles.scrollContentContainer}>
 			<View style={styles.infoCard}>
 				<Text style={styles.infoTitle}>Document Information</Text>
-				<DetailRow label="User" value={docDetails.userName} />
+				<DetailRow
+					label="User"
+					value={docDetails.userName}
+					iconName="person-outline"
+				/>
 				<DetailRow
 					label="Document Type"
 					value={docDetails.documentType}
+					iconName="article"
 				/>
 				<DetailRow
 					label="Status"
@@ -272,12 +391,17 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 						docDetails.status.charAt(0).toUpperCase() +
 						docDetails.status.slice(1)
 					}
-					valueStyle={{ color: statusColor, fontWeight: "bold" }}
+					valueStyle={{
+						color: getStatusColor(docDetails.status as RideStatus),
+						fontFamily: typography.primaryBold,
+					}}
+					iconName={statusIconName}
 				/>
 				{docDetails.submittedDate && (
 					<DetailRow
 						label="Submitted"
 						value={docDetails.submittedDate}
+						iconName="today"
 					/>
 				)}
 			</View>
@@ -297,56 +421,69 @@ const OwnerDocumentViewerScreen: React.FC<OwnerDocumentViewerScreenProps> = ({
 						resizeMode="contain"
 					/>
 				) : (
-					<View style={styles.noImageContainer}>
+					<View
+						style={[
+							styles.noImageContainer,
+							{ height: imageDisplayDimensions.height },
+						]}>
+						<MaterialIcons
+							name="broken-image"
+							size={48}
+							color={colors.textDisabled}
+						/>
 						<Text style={styles.noImageText}>
 							Image not available.
 						</Text>
 					</View>
 				)}
 			</View>
-			{/* This screen is view-only for the Owner as per role separation of concerns.
-          Approval/Rejection actions are on the DocumentApprovalListScreen. */}
+			{/* Owner view is typically read-only for a single document. Actions are on the list screen. */}
 		</ScrollView>
 	);
 };
 
-// Styles (can be similar to AdminDocumentViewerScreen)
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		backgroundColor: colors.backgroundMain, // Dark theme
 	},
 	scrollContentContainer: {
 		padding: spacing.m,
+		paddingBottom: spacing.xl, // Ensure space at bottom
 	},
 	centered: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
+		backgroundColor: colors.backgroundMain, // Dark theme
+		padding: spacing.l,
 	},
 	loadingText: {
 		marginTop: spacing.s,
-		color: colors.textMedium,
+		color: colors.textSecondary, // Light text on dark
+		fontFamily: typography.primaryRegular,
+		fontSize: typography.fontSizes.m,
 	},
 	errorText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.error,
+		fontFamily: typography.primaryRegular,
+		color: colors.textError, // Themed error color
+		textAlign: "center",
+		marginTop: spacing.s,
+		marginBottom: spacing.m,
 	},
 	infoCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background
 		borderRadius: borderRadius.l,
 		padding: spacing.m,
 		marginBottom: spacing.l,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 2,
-		elevation: 2,
+		borderWidth: 1,
+		borderColor: colors.borderDefault, // Subtle border
 	},
 	infoTitle: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary, // Light text
 		marginBottom: spacing.m,
 		borderBottomWidth: StyleSheet.hairlineWidth,
 		borderBottomColor: colors.borderDefault,
@@ -355,55 +492,65 @@ const styles = StyleSheet.create({
 	detailRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		marginBottom: spacing.s,
+		marginBottom: spacing.s, // Consistent spacing
+		alignItems: "flex-start",
+	},
+	detailLabelContainer: {
+		flexDirection: "row",
+		alignItems: "center",
+		flex: 0.4, // Adjust flex for label part
+		marginRight: spacing.s,
+	},
+	detailRowIcon: {
+		marginRight: spacing.s,
+		marginTop: spacing.xxs, // Align icon better with text
 	},
 	detailLabel: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
-		marginRight: spacing.s,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text for labels
 	},
 	detailValue: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textPrimary,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+		color: colors.textPrimary, // Light text for values
 		textAlign: "right",
-		flexShrink: 1,
+		flex: 0.6, // Adjust flex for value part
 	},
 	imageViewerCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background
 		borderRadius: borderRadius.l,
-		padding: spacing.s, // Less padding around the image itself
-		alignItems: "center", // Center the image if it's smaller than container
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 2,
-		elevation: 2,
+		padding: spacing.s,
+		alignItems: "center",
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	imageViewerTitle: {
 		fontSize: typography.fontSizes.s,
-		fontWeight: typography.fontWeights.medium,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryMedium,
+		color: colors.textSecondary, // Muted light text
 		marginBottom: spacing.m,
 		alignSelf: "flex-start",
-		paddingHorizontal: spacing.m - spacing.s, // Align with card padding
+		paddingHorizontal: spacing.m - spacing.s,
 	},
 	documentImage: {
-		// width and height are set dynamically
-		borderRadius: borderRadius.s, // Optional: if you want rounded image corners
-		backgroundColor: colors.greyLighter, // Background while image loads or if transparent
+		borderRadius: borderRadius.s,
+		backgroundColor: colors.backgroundMain, // Darker background for image loading
 	},
 	noImageContainer: {
 		width: "100%",
-		height: 250, // Default height
+		// height is dynamic
 		justifyContent: "center",
 		alignItems: "center",
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.backgroundInput, // Slightly different dark for placeholder area
 		borderRadius: borderRadius.m,
+		paddingVertical: spacing.xl, // Add padding if image is missing
 	},
 	noImageText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textPlaceholder, // Muted placeholder text
+		marginTop: spacing.s,
 	},
 });
 

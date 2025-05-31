@@ -1,301 +1,439 @@
 // src/screens/App/Booking/BookingConfirmationScreen.tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
-import { RouteProp, CommonActions } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { ExploreStackParamList, UserTabParamList } from '../../../navigation/types'; // UserTabParamList for navigating to other tabs
-import  PrimaryButton  from '../../../components/common/PrimaryButton';
-import { colors, spacing, typography, borderRadius } from '../../../theme';
+import { CommonActions, RouteProp } from "@react-navigation/native";
+import { StackNavigationProp } from "@react-navigation/stack";
+import React, { useEffect } from "react";
+import {
+	ActivityIndicator,
+	Image,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { useDispatch, useSelector } from "react-redux"; // Added
+import PrimaryButton from "../../../components/common/PrimaryButton";
+import {
+	ExploreStackParamList,
+	UserTabParamList,
+} from "../../../navigation/types";
+import { AppDispatch, RootState } from "../../../store/store"; // Added
+import { borderRadius, colors, spacing, typography } from "../../../theme";
 
-// --- Dummy Data Service (replace with actual API data later) ---
+// ***** TODO: Replace with your actual booking slice imports *****
+import { fetchConfirmedBookingByIdThunk } from "../../../store/slices/bookingSlice"; // Replace 'bookingSlice' with your actual slice name
+
+// Keep this interface, or import it if defined in your slice/shared types
 interface ConfirmedBookingDetails {
-  bookingId: string;
-  bikeName: string;
-  bikeImageUrl: string;
-  rentalPeriod: string; // e.g., "Sep 15, 2:00 PM - Sep 16, 2:00 PM"
-  totalAmount: string; // e.g., "$45.00" or "₹3500.00"
-  pickupInstructions?: string;
+	bookingId: string; // Should match the _id from your backend booking object
+	bikeName: string;
+	bikeImageUrl: string;
+	rentalPeriod: string;
+	totalAmount: string;
+	pickupInstructions?: string;
+	// Add other relevant fields like bikeModel, bikeBrand, locationAddress, etc.
 }
+// ***** END TODO *****
 
-const fetchConfirmedBookingDetails = async (bookingId: string): Promise<ConfirmedBookingDetails | null> => {
-  // Simulate API call
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve({
-        bookingId,
-        bikeName: 'Mountain Explorer X3', // Example data
-        bikeImageUrl: 'https://via.placeholder.com/100x80.png?text=Bike+Image',
-        rentalPeriod: 'Sep 15, 2:00 PM - Sep 16, 2:00 PM',
-        totalAmount: '₹4500.00',
-        pickupInstructions: 'Please bring a valid ID for pickup. Make sure to check the bike condition before starting your ride.',
-      });
-    }, 300);
-  });
-};
-// --- End Dummy Data ---
-
-type BookingConfirmationScreenRouteProp = RouteProp<ExploreStackParamList, 'BookingConfirmation'>;
-// We need StackNavigationProp for ExploreStack to potentially reset it,
-// and also access to parent navigator if we want to switch tabs.
-type BookingConfirmationScreenNavigationProp = StackNavigationProp<ExploreStackParamList, 'BookingConfirmation'>;
+type BookingConfirmationScreenRouteProp = RouteProp<
+	ExploreStackParamList,
+	"BookingConfirmation"
+>;
+type BookingConfirmationScreenNavigationProp = StackNavigationProp<
+	ExploreStackParamList,
+	"BookingConfirmation"
+>;
 
 interface BookingConfirmationScreenProps {
-  route: BookingConfirmationScreenRouteProp;
-  navigation: BookingConfirmationScreenNavigationProp;
+	route: BookingConfirmationScreenRouteProp;
+	navigation: BookingConfirmationScreenNavigationProp;
 }
 
-const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps> = ({ route, navigation }) => {
-  const { bookingId } = route.params;
-  const [bookingDetails, setBookingDetails] = useState<ConfirmedBookingDetails | null>(null);
-  const [loading, setLoading] = useState(true);
+const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps> = ({
+	route,
+	navigation,
+}) => {
+	const { bookingId } = route.params;
+	const dispatch = useDispatch<AppDispatch>();
 
-  useEffect(() => {
-    const loadDetails = async () => {
-      setLoading(true);
-      const details = await fetchConfirmedBookingDetails(bookingId);
-      setBookingDetails(details);
-      setLoading(false);
-    };
-    loadDetails();
-  }, [bookingId]);
+	// ***** TODO: Select from your actual booking slice state *****
+	const {
+		confirmedBooking: bookingDetails, // Renamed for consistency with previous dummy data structure
+		isLoadingConfirmation: loading, // Use loading state from your slice
+		errorConfirmation: error, // Use error state from your slice
+	} = useSelector((state: RootState) => state.booking); // Replace 'booking' with your slice name
+	// ***** END TODO *****
 
-  const handleGoToMyRentals = () => {
-    // This navigation is a bit more complex as it involves switching tabs
-    // and potentially navigating within that tab's stack.
-    // It assumes 'RentalsTab' is a route in UserTabParamList and
-    // 'MyRentalsScreen' is the initial route of RentalsStackNavigator.
-    navigation.getParent<StackNavigationProp<UserTabParamList>>()?.navigate('RentalsTab');
-    // Or, if MyRentalsScreen is a specific screen in a stack within RentalsTab:
-    // navigation.getParent<StackNavigationProp<UserTabParamList>>()?.navigate('RentalsTab', {
-    //   screen: 'MyRentalsScreen', // Navigate to specific screen in nested stack
-    // });
+	useEffect(() => {
+		if (bookingId) {
+			dispatch(fetchConfirmedBookingByIdThunk(bookingId));
+		}
+		// Clear details when the screen is unmounted
+		return () => {
+			// dispatch(clearConfirmedBooking()); // Uncomment if you have this action
+		};
+	}, [dispatch, bookingId]);
 
-    // And also reset the current ExploreStack to its root so "back" doesn't come here
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'Explore' }],
-      })
-    );
-  };
+	const handleGoToMyRentals = () => {
+		navigation
+			.getParent<StackNavigationProp<UserTabParamList>>()
+			?.navigate("RentalsTab" as any);
+		navigation.dispatch(
+			CommonActions.reset({
+				index: 0,
+				routes: [{ name: "Explore" }],
+			})
+		);
+	};
 
-  const handleBookAnotherBike = () => {
-    // Navigate back to the Explore screen, potentially resetting the stack
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'Explore' }],
-      })
-    );
-    // Or simply: navigation.navigate('Explore'); and let the Explore screen handle its state.
-    // Or: navigation.popToTop(); // If Explore is the first screen in this stack
-  };
+	const handleBookAnotherBike = () => {
+		navigation.dispatch(
+			CommonActions.reset({
+				index: 0,
+				routes: [{ name: "Explore" }],
+			})
+		);
+	};
 
-  if (loading || !bookingDetails) {
-    return <View style={styles.centered}><Text>Loading confirmation...</Text></View>;
-  }
+	if (loading) {
+		// Use loading state from Redux
+		return (
+			<View style={styles.centered}>
+				<ActivityIndicator size="large" color={colors.primary} />
+				<Text style={styles.loadingText}>Loading confirmation...</Text>
+			</View>
+		);
+	}
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.iconContainer}>
-      
-        <View style={styles.successIconBackground}>
-          <Text style={styles.successIcon}>✓</Text>
-        </View>
-      </View>
+	if (error) {
+		// Use error state from Redux
+		return (
+			<View style={styles.centered}>
+				<MaterialIcons
+					name="error-outline"
+					size={48}
+					color={colors.error}
+				/>
+				<Text style={styles.errorText}>
+					Error loading confirmation: {error}
+				</Text>
+				<PrimaryButton
+					title="Try Again"
+					onPress={() =>
+						bookingId &&
+						dispatch(fetchConfirmedBookingByIdThunk(bookingId))
+					}
+				/>
+			</View>
+		);
+	}
 
-      <Text style={styles.title}>Booking Confirmed!</Text>
-      <Text style={styles.subtitle}>Your bike rental is all set. Enjoy your ride!</Text>
+	if (!bookingDetails) {
+		return (
+			<View style={styles.centered}>
+				<MaterialIcons
+					name="search-off"
+					size={48}
+					color={colors.textSecondary}
+				/>
+				<Text style={styles.notFoundText}>
+					Booking details not found.
+				</Text>
+				<PrimaryButton
+					title="Go Home"
+					onPress={handleBookAnotherBike}
+				/>
+			</View>
+		);
+	}
 
-      <View style={styles.summaryCard}>
-        <View style={styles.bikeInfoRow}>
-          <Image source={{ uri: bookingDetails.bikeImageUrl }} style={styles.bikeImage} />
-          <View style={styles.bikeTextContainer}>
-            <Text style={styles.bikeName}>{bookingDetails.bikeName}</Text>
-            <Text style={styles.rentalPeriod}>{bookingDetails.rentalPeriod}</Text>
-          </View>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Total Amount</Text>
-          <Text style={styles.detailValueAmount}>{bookingDetails.totalAmount}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Booking Reference</Text>
-          <Text style={styles.detailValue}>#{bookingDetails.bookingId}</Text>
-        </View>
-      </View>
+	// Helper to format rental period if details are structured differently
+	const formatRentalPeriod = (
+		startDateStr?: string,
+		endDateStr?: string
+	): string => {
+		if (!startDateStr || !endDateStr) return "N/A";
+		try {
+			const startDate = new Date(startDateStr);
+			const endDate = new Date(endDateStr);
+			const options: Intl.DateTimeFormatOptions = {
+				month: "short",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+				hour12: true,
+			};
+			return `${startDate.toLocaleDateString(
+				undefined,
+				options
+			)} - ${endDate.toLocaleDateString(undefined, options)}`;
+		} catch (e) {
+			return "Invalid date format";
+		}
+	};
 
-      {bookingDetails.pickupInstructions && (
-        <View style={styles.infoNoteContainer}>
-          <Text style={styles.infoIcon}>ⓘ</Text>
-          <Text style={styles.infoNoteText}>{bookingDetails.pickupInstructions}</Text>
-        </View>
-      )}
+	// Assuming bookingDetails from Redux might have bike.model, bike.images, etc.
+	// You'll need to map these to the ConfirmedBookingDetails structure if they differ.
+	// For this example, I'll assume bookingDetails matches ConfirmedBookingDetails.
+	// If not, you'd do a mapping here, perhaps with useMemo.
 
-      <PrimaryButton
-        title="Go to My Rentals"
-        onPress={handleGoToMyRentals}
-        style={styles.actionButton}
-      />
-    
-      <TouchableOpacity
-        style={[styles.actionButton, styles.secondaryButton]}
-        onPress={handleBookAnotherBike}
-      >
-        <Text style={styles.secondaryButtonText}>Book Another Bike</Text>
-      </TouchableOpacity>
+	// Example: If your Redux bookingDetails has a nested bike object
+	// const bikeName = bookingDetails.bike?.model || 'Bike Name N/A';
+	// const bikeImageUrl = bookingDetails.bike?.images?.[0]?.url || 'https://placehold.co/100x80/1A1A1A/F5F5F5?text=Bike';
+	// const rentalPeriodDisplay = formatRentalPeriod(bookingDetails.startDate, bookingDetails.endDate);
+	// const totalAmountDisplay = `₹${(bookingDetails.totalPrice || 0).toFixed(2)}`;
 
-      <Text style={styles.footerText}>
-        You can view your booking details anytime in 'My Rentals'.
-      </Text>
-    </ScrollView>
-  );
+	return (
+		<ScrollView
+			style={styles.container}
+			contentContainerStyle={styles.contentContainer}>
+			<View style={styles.iconContainer}>
+				<View style={styles.successIconBackground}>
+					<MaterialIcons
+						name="check-circle"
+						size={40}
+						color={colors.success}
+					/>
+				</View>
+			</View>
+
+			<Text style={styles.title}>Booking Confirmed!</Text>
+			<Text style={styles.subtitle}>
+				Your bike rental is all set. Enjoy your ride!
+			</Text>
+
+			<View style={styles.summaryCard}>
+				<View style={styles.bikeInfoRow}>
+					<Image
+						source={{ uri: bookingDetails.bikeImageUrl }}
+						style={styles.bikeImage}
+					/>
+					<View style={styles.bikeTextContainer}>
+						<Text style={styles.bikeName}>
+							{bookingDetails.bikeName}
+						</Text>
+						<Text style={styles.rentalPeriod}>
+							{bookingDetails.rentalPeriod}
+						</Text>
+					</View>
+				</View>
+				<View style={styles.detailRow}>
+					<Text style={styles.detailLabel}>Total Amount</Text>
+					<Text style={styles.detailValueAmount}>
+						{bookingDetails.totalAmount}
+					</Text>
+				</View>
+				<View style={styles.detailRow}>
+					<Text style={styles.detailLabel}>Booking Reference</Text>
+					<Text style={styles.detailValue}>
+						#{bookingDetails.bookingId.toUpperCase()}
+					</Text>
+				</View>
+			</View>
+
+			{bookingDetails.pickupInstructions && (
+				<View style={styles.infoNoteContainer}>
+					<MaterialIcons
+						name="info-outline"
+						size={24}
+						color={colors.info}
+						style={styles.infoIconThemed}
+					/>
+					<Text style={styles.infoNoteText}>
+						{bookingDetails.pickupInstructions}
+					</Text>
+				</View>
+			)}
+
+			<PrimaryButton
+				title="Go to My Rentals"
+				onPress={handleGoToMyRentals}
+				style={styles.actionButton}
+			/>
+
+			<TouchableOpacity
+				style={[styles.actionButton, styles.secondaryButton]}
+				onPress={handleBookAnotherBike}>
+				<Text style={styles.secondaryButtonText}>
+					Book Another Bike
+				</Text>
+			</TouchableOpacity>
+
+			<Text style={styles.footerText}>
+				You can view your booking details anytime in 'My Rentals'.
+			</Text>
+		</ScrollView>
+	);
 };
 
+// Styles (assuming they are already themed from previous step)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundMain || '#FFFFFF',
-  },
-  contentContainer: {
-    padding: spacing.l, // e.g., 24
-    alignItems: 'center',
-    paddingBottom: spacing.xxl,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    marginBottom: spacing.m,
-    marginTop: spacing.xl,
-  },
-  successIconBackground: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primaryLight || '#E6F7FF', // Light green
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  successIcon: {
-    fontSize: 40,
-    color: colors.primary || 'green',
-    fontWeight: 'bold',
-  },
-  title: {
-    fontSize: typography.fontSizes.xxxl, // e.g., 28
-    fontWeight: typography.fontWeights.bold,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontSize: typography.fontSizes.l, // e.g., 16
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  summaryCard: {
-    backgroundColor: colors.white, // Or a very light grey
-    borderRadius: borderRadius.l,
-    padding: spacing.m,
-    width: '100%',
-    marginBottom: spacing.l,
-    borderWidth: 1,
-    borderColor: colors.borderDefault || '#EEE',
-    // shadow
-    // shadowColor: '#000',
-    // shadowOffset: { width: 0, height: 1 },
-    // shadowOpacity: 0.05,
-    // shadowRadius: 2,
-    // elevation: 1,
-  },
-  bikeInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.m,
-  },
-  bikeImage: {
-    width: 80,
-    height: 60,
-    borderRadius: borderRadius.s,
-    marginRight: spacing.m,
-    backgroundColor: colors.greyLighter, // Placeholder bg
-  },
-  bikeTextContainer: {
-    flex: 1,
-  },
-  bikeName: {
-    fontSize: typography.fontSizes.l,
-    fontWeight: typography.fontWeights.semiBold,
-    color: colors.textPrimary,
-  },
-  rentalPeriod: {
-    fontSize: typography.fontSizes.s,
-    color: colors.primaryLight,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.s,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderDefault || '#F0F0F0',
-  },
-  detailLabel: {
-    fontSize: typography.fontSizes.m,
-    color: colors.textSecondary,
-  },
-  detailValue: {
-    fontSize: typography.fontSizes.m,
-    color: colors.textPrimary,
-    fontWeight: typography.fontWeights.medium,
-  },
-  detailValueAmount: {
-    fontSize: typography.fontSizes.m,
-    color: colors.primary, // Highlight amount
-    fontWeight: typography.fontWeights.bold,
-  },
-  infoNoteContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundLight || '#F0F0F0',
-    padding: spacing.m,
-    borderRadius: borderRadius.m,
-    width: '100%',
-    marginBottom: spacing.xl,
-  },
-  infoIcon: {
-    fontSize: typography.fontSizes.l,
-    color: colors.textMedium,
-    marginRight: spacing.s,
-  },
-  infoNoteText: {
-    fontSize: typography.fontSizes.s,
-    color: colors.textMedium,
-    flexShrink: 1,
-  },
-  actionButton: {
-    width: '100%',
-    marginBottom: spacing.m,
-  },
-  secondaryButton: {
-    backgroundColor: colors.white,
-    borderColor: colors.primary,
-    borderWidth: 1.5,
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontWeight: typography.fontWeights.semiBold,
-    fontSize: typography.fontSizes.m, // Match PrimaryButton text if needed
-  },
-  footerText: {
-    fontSize: typography.fontSizes.s,
-    color: colors.primaryLight,
-    textAlign: 'center',
-    marginTop: spacing.m,
-  },
+	container: {
+		flex: 1,
+		backgroundColor: colors.backgroundMain,
+	},
+	contentContainer: {
+		padding: spacing.l,
+		alignItems: "center",
+		paddingBottom: spacing.xxl,
+	},
+	centered: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		backgroundColor: colors.backgroundMain,
+		paddingHorizontal: spacing.l,
+	},
+	loadingText: {
+		marginTop: spacing.m,
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+	},
+	errorText: {
+		marginTop: spacing.s,
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
+		color: colors.textError,
+		textAlign: "center",
+		marginBottom: spacing.m,
+	},
+	notFoundText: {
+		marginTop: spacing.s,
+		fontSize: typography.fontSizes.l,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+		textAlign: "center",
+		marginBottom: spacing.m,
+	},
+	iconContainer: {
+		marginBottom: spacing.m,
+		marginTop: spacing.xl,
+	},
+	successIconBackground: {
+		width: 80,
+		height: 80,
+		borderRadius: borderRadius.circle,
+		backgroundColor: colors.backgroundCard,
+		justifyContent: "center",
+		alignItems: "center",
+		borderWidth: 2,
+		borderColor: colors.success,
+	},
+	title: {
+		fontSize: typography.fontSizes.xxxl,
+		fontFamily: typography.primaryBold,
+		color: colors.textPrimary,
+		textAlign: "center",
+		marginBottom: spacing.xs,
+	},
+	subtitle: {
+		fontSize: typography.fontSizes.l,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+		textAlign: "center",
+		marginBottom: spacing.xl,
+	},
+	summaryCard: {
+		backgroundColor: colors.backgroundCard,
+		borderRadius: borderRadius.l,
+		padding: spacing.m,
+		width: "100%",
+		marginBottom: spacing.l,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
+	},
+	bikeInfoRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginBottom: spacing.m,
+	},
+	bikeImage: {
+		width: 80,
+		height: 60,
+		borderRadius: borderRadius.s,
+		marginRight: spacing.m,
+		backgroundColor: colors.borderDefault,
+	},
+	bikeTextContainer: {
+		flex: 1,
+	},
+	bikeName: {
+		fontSize: typography.fontSizes.l,
+		fontFamily: typography.primarySemiBold,
+		color: colors.textPrimary,
+	},
+	rentalPeriod: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+	},
+	detailRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		paddingVertical: spacing.m,
+		borderBottomWidth: StyleSheet.hairlineWidth,
+		borderBottomColor: colors.borderDefault,
+	},
+	detailLabel: {
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+	},
+	detailValue: {
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryMedium,
+		color: colors.textPrimary,
+	},
+	detailValueAmount: {
+		fontSize: typography.fontSizes.m,
+		color: colors.primary,
+		fontFamily: typography.primaryBold,
+	},
+	infoNoteContainer: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		backgroundColor: colors.backgroundCard,
+		padding: spacing.m,
+		borderRadius: borderRadius.m,
+		width: "100%",
+		marginBottom: spacing.xl,
+		borderLeftWidth: 4,
+		borderLeftColor: colors.info,
+	},
+	infoIconThemed: {
+		marginRight: spacing.s,
+		marginTop: spacing.xxs,
+	},
+	infoNoteText: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+		flexShrink: 1,
+		lineHeight: typography.lineHeights.getForSize(typography.fontSizes.s),
+	},
+	actionButton: {
+		width: "100%",
+		marginBottom: spacing.m,
+	},
+	secondaryButton: {
+		backgroundColor: "transparent",
+		borderColor: colors.primary,
+		borderWidth: 1.5,
+	},
+	secondaryButtonText: {
+		color: colors.primary,
+		fontFamily: typography.primarySemiBold,
+		fontSize: typography.fontSizes.m,
+	},
+	footerText: {
+		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+		textAlign: "center",
+		marginTop: spacing.m,
+	},
 });
 
 export default BookingConfirmationScreen;

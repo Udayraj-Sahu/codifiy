@@ -1,138 +1,176 @@
-// components/PrimaryButton.tsx (Conceptual - Corrected)
+// components/PrimaryButton.tsx
 import React from 'react';
 import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  View,
-  StyleProp,
-  ViewStyle,
-  TextStyle,
-  GestureResponderEvent, // Import GestureResponderEvent
+    TouchableOpacity,
+    Text,
+    StyleSheet,
+    ActivityIndicator,
+    View,
+    StyleProp,
+    ViewStyle,
+    TextStyle,
+    GestureResponderEvent,
 } from 'react-native';
 
-// --- Theme constants (Colors, Fonts, Spacing, BorderRadius) would be here as before ---
-// Placeholder for actual theme constants (same as used in StyledTextInput.tsx)
-const Colors = {
-  primary: '#A0D911', // Example primary green from your designs
-  primaryDisabled: '#D3EAA4', // A lighter, desaturated version for disabled state
-  textWhite: '#FFFFFF',
-  textDisabled: '#F0F0F0', // Or a more muted white/light grey for disabled text
-};
-
-const Fonts = {
-  size: {
-    medium: 16,
-    large: 18,
-  },
-  weight: {
-    bold: 'bold' as 'bold',
-    semiBold: '600' as '600',
-  },
-};
-
-const Spacing = {
-  small: 8,
-  medium: 14,
-  large: 24,
-};
-
-const BorderRadius = {
-  standard: 8,
-  pill: 25,
-};
-// --- End Theme constants ---
-
+// Import theme constants
+import {
+    colors,
+    typography,
+    spacing,
+    borderRadius,
+} from '../../theme'; // Adjust path if your theme file is elsewhere
 
 // Define the props interface
 interface PrimaryButtonProps {
-  title: string;
-  onPress: (event: GestureResponderEvent) => void; // MODIFIED: Expects GestureResponderEvent
-  disabled?: boolean;
-  isLoading?: boolean;
-  style?: StyleProp<ViewStyle>;
-  textStyle?: StyleProp<TextStyle>;
-  iconLeft?: React.ReactNode;
-  iconRight?: React.ReactNode;
-  fullWidth?: boolean;
+    title: string;
+    onPress: (event: GestureResponderEvent) => void;
+    disabled?: boolean;
+    isLoading?: boolean;
+    style?: StyleProp<ViewStyle>;
+    textStyle?: StyleProp<TextStyle>;
+    iconLeft?: React.ReactNode;
+    iconRight?: React.ReactNode;
+    fullWidth?: boolean;
+    variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'link'; // Optional variant prop
+    size?: 'small' | 'medium' | 'large'; // Optional size prop
 }
 
 const PrimaryButton: React.FC<PrimaryButtonProps> = ({
-  title,
-  onPress, // This will now be (event: GestureResponderEvent) => void
-  disabled = false,
-  isLoading = false,
-  style,
-  textStyle,
-  iconLeft,
-  iconRight,
-  fullWidth = true,
+    title,
+    onPress,
+    disabled = false,
+    isLoading = false,
+    style,
+    textStyle,
+    iconLeft,
+    iconRight,
+    fullWidth = true,
+    variant = 'primary', // Default variant
+    size = 'medium', // Default size
 }) => {
-  const isButtonDisabled = disabled || isLoading;
-  const buttonBackgroundColor = isButtonDisabled ? Colors.primaryDisabled : Colors.primary;
-  const currentTextColor = isButtonDisabled ? Colors.textDisabled : Colors.textWhite;
+    const isButtonDisabled = disabled || isLoading;
 
-  // The `onPress` prop from TouchableOpacity passes the event automatically.
-  // So, simply passing `onPress` through is correct if the types match.
-  const handlePress = (event: GestureResponderEvent) => {
-    if (onPress) {
-      onPress(event); // Pass the event to the handler provided by the parent
+    // Determine styles based on variant and disabled state
+    // These could be further expanded in a dedicated theme file or helper
+    let currentBackgroundColor: string;
+    let currentTextColor: string;
+    let currentBorderColor: string | undefined;
+    let currentBorderWidth: number | undefined;
+
+    switch (variant) {
+        case 'secondary':
+            currentBackgroundColor = isButtonDisabled ? colors.backgroundDisabled : colors.buttonSecondaryBackground;
+            currentTextColor = isButtonDisabled ? colors.textDisabled : colors.buttonSecondaryText;
+            break;
+        case 'outline':
+            currentBackgroundColor = 'transparent';
+            currentTextColor = isButtonDisabled ? colors.textDisabled : colors.primary; // Or colors.buttonOutlineText
+            currentBorderColor = isButtonDisabled ? colors.borderDisabled : colors.primary; // Or colors.buttonOutlineBorder
+            currentBorderWidth = 1;
+            break;
+        case 'ghost':
+            currentBackgroundColor = 'transparent';
+            currentTextColor = isButtonDisabled ? colors.textDisabled : colors.primary; // Or colors.buttonGhostText
+            break;
+        case 'link':
+            currentBackgroundColor = 'transparent';
+            currentTextColor = isButtonDisabled ? colors.textDisabled : colors.textLink;
+            break;
+        case 'primary':
+        default:
+            currentBackgroundColor = isButtonDisabled ? colors.buttonPrimaryDisabledBackground : colors.buttonPrimaryBackground;
+            currentTextColor = isButtonDisabled ? colors.buttonPrimaryDisabledText : colors.buttonPrimaryText;
+            break;
     }
-  };
 
-  return (
-    <TouchableOpacity
-      style={[
-        styles.button,
-        { backgroundColor: buttonBackgroundColor },
-        fullWidth && styles.fullWidth,
-        style,
-      ]}
-      onPress={handlePress} // Pass our wrapper or directly `onPress`
-      disabled={isButtonDisabled}
-      activeOpacity={0.7}
-    >
-      {isLoading ? (
-        <ActivityIndicator color={currentTextColor} size="small" />
-      ) : (
-        <View style={styles.contentContainer}>
-          {iconLeft && <View style={styles.iconWrapper}>{iconLeft}</View>}
-          <Text style={[styles.text, { color: currentTextColor }, textStyle]}>
-            {title}
-          </Text>
-          {iconRight && <View style={styles.iconWrapper}>{iconRight}</View>}
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+    // Determine padding and font size based on size prop
+    let currentPaddingVertical = spacing.m;
+    let currentFontSize = typography.fontSizes.m;
+
+    switch (size) {
+        case 'small':
+            currentPaddingVertical = spacing.s;
+            currentFontSize = typography.fontSizes.s;
+            break;
+        case 'large':
+            currentPaddingVertical = spacing.l;
+            currentFontSize = typography.fontSizes.l;
+            break;
+        case 'medium':
+        default:
+            // Already set
+            break;
+    }
+
+
+    const handlePress = (event: GestureResponderEvent) => {
+        if (!isButtonDisabled && onPress) {
+            onPress(event);
+        }
+    };
+
+    return (
+        <TouchableOpacity
+            style={[
+                styles.button,
+                {
+                    backgroundColor: currentBackgroundColor,
+                    borderColor: currentBorderColor,
+                    borderWidth: currentBorderWidth,
+                    paddingVertical: currentPaddingVertical,
+                },
+                fullWidth && styles.fullWidth,
+                style, // External style overrides
+            ]}
+            onPress={handlePress}
+            disabled={isButtonDisabled}
+            activeOpacity={0.7}>
+            {isLoading ? (
+                <ActivityIndicator color={currentTextColor} size="small" />
+            ) : (
+                <View style={styles.contentContainer}>
+                    {iconLeft && <View style={styles.iconWrapper}>{iconLeft}</View>}
+                    <Text
+                        style={[
+                            styles.text,
+                            { color: currentTextColor, fontSize: currentFontSize },
+                            textStyle, // External text style overrides
+                        ]}>
+                        {title}
+                    </Text>
+                    {iconRight && <View style={styles.iconWrapper}>{iconRight}</View>}
+                </View>
+            )}
+        </TouchableOpacity>
+    );
 };
 
 const styles = StyleSheet.create({
-  button: {
-    paddingVertical: Spacing.medium,
-    paddingHorizontal: Spacing.large,
-    borderRadius: BorderRadius.standard,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  fullWidth: {
-    width: '100%',
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  text: {
-    fontSize: Fonts.size.medium,
-    fontWeight: Fonts.weight.bold,
-    textAlign: 'center',
-  },
-  iconWrapper: {
-    marginHorizontal: Spacing.small,
-  },
+    button: {
+        paddingHorizontal: spacing.l, // Use theme spacing
+        borderRadius: borderRadius.m, // Use theme border radius (m or default)
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        // Vertical padding is now dynamic based on 'size' prop
+    },
+    fullWidth: {
+        width: '100%',
+    },
+    contentContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    text: {
+        // fontSize is now dynamic based on 'size' prop
+        fontFamily: typography.primaryBold, // Use theme typography
+        // fontWeight: typography.fontWeights.bold, // fontFamily often includes weight
+        textAlign: 'center',
+    },
+    iconWrapper: {
+        marginHorizontal: spacing.s, // Use theme spacing
+    },
 });
 
 export default PrimaryButton;

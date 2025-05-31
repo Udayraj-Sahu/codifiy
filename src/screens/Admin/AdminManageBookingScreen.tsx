@@ -1,4 +1,5 @@
 // src/screens/Admin/AdminManageBookingsScreen.tsx
+import { RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import React, {
 	useCallback,
@@ -7,78 +8,92 @@ import React, {
 	useState,
 } from "react";
 import {
+	ActivityIndicator,
 	Alert,
 	FlatList,
 	Image,
+	RefreshControl,
+	ScrollView,
 	StyleSheet,
 	Text,
 	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // For icons
 import {
 	AdminStackParamList,
 	BookingStatusAdmin,
-} from "../../navigation/types"; // Adjust path
-import { borderRadius, colors, spacing, typography } from "../../theme"; // Adjust path
-// import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // For icons
+} from "../../navigation/types";
+import { borderRadius, colors, spacing, typography } from "../../theme";
+// PrimaryButton is not directly used on this screen, but in AdminBookingCard if it had actions
+// import PrimaryButton from "../../../components/common/PrimaryButton";
 
-// --- Types and Dummy Data ---
+// --- Types and Dummy Data (structure remains, placeholders updated for dark theme) ---
 interface BookingAdminView {
 	id: string;
 	userPhotoUrl?: string;
 	userName: string;
-	status: Exclude<BookingStatusAdmin, "All">; // Card status won't be 'All'
+	status: Exclude<BookingStatusAdmin, "All">;
 	bikeName: string;
 	bikeId: string;
-	bookingDates: string; // e.g., "Jan 12 - Jan 14"
-	assignedAdminName?: string; // Optional based on prompt
-	adminPhotoUrl?: string; // Optional
-	price: string; // e.g., "$50"
+	bookingDates: string;
+	assignedAdminName?: string;
+	price: string;
 }
 
 const DUMMY_ADMIN_BOOKINGS: BookingAdminView[] = [
 	{
 		id: "bk001",
-		userPhotoUrl: "https://via.placeholder.com/40x40.png?text=JD",
+		userPhotoUrl: "https://placehold.co/40x40/1A1A1A/F5F5F5?text=JD",
 		userName: "John Doe",
 		status: "Active",
-		bikeName: "Mountain X",
+		bikeName: "Mountain X Pro",
 		bikeId: "BX2938",
-		bookingDates: "Jan 12 - Jan 14, 2025",
+		bookingDates: "May 25 - May 27, 2025",
 		assignedAdminName: "Sarah K",
-		price: "$50",
+		price: "₹5000",
 	},
 	{
 		id: "bk002",
-		userPhotoUrl: "https://via.placeholder.com/40x40.png?text=PS",
+		userPhotoUrl: "https://placehold.co/40x40/1A1A1A/F5F5F5?text=PS",
 		userName: "Priya S",
 		status: "Completed",
-		bikeName: "Roadster 2K",
+		bikeName: "Roadster 2K Deluxe",
 		bikeId: "RX2000",
-		bookingDates: "Jan 08 - Jan 10, 2025",
-		price: "$30",
+		bookingDates: "May 08 - May 10, 2025",
+		price: "₹3000",
 	},
 	{
 		id: "bk003",
-		userPhotoUrl: "https://via.placeholder.com/40x40.png?text=MJ",
+		userPhotoUrl: "https://placehold.co/40x40/1A1A1A/F5F5F5?text=MJ",
 		userName: "Mike Johnson",
 		status: "Cancelled",
-		bikeName: "City Cruiser",
+		bikeName: "City Cruiser Ltd",
 		bikeId: "CC100",
-		bookingDates: "Jan 05 - Jan 06, 2025",
-		price: "$40",
+		bookingDates: "Apr 05 - Apr 06, 2025",
+		price: "₹4000",
 	},
 	{
 		id: "bk004",
-		userPhotoUrl: "https://via.placeholder.com/40x40.png?text=AL",
-		userName: "Alice L",
+		userPhotoUrl: "https://placehold.co/40x40/1A1A1A/F5F5F5?text=AL",
+		userName: "Alice L.",
 		status: "Active",
-		bikeName: "Electric Glide",
+		bikeName: "Electric Glide Max",
 		bikeId: "EG500",
-		bookingDates: "Jan 13 - Jan 15, 2025",
+		bookingDates: "May 26 - May 28, 2025",
 		assignedAdminName: "Admin Bot",
-		price: "$75",
+		price: "₹7500",
+	},
+	{
+		id: "bk005",
+		userPhotoUrl: "https://placehold.co/40x40/1A1A1A/F5F5F5?text=RB",
+		userName: "Robert Brown",
+		status: "Upcoming",
+		bikeName: "Speedster Z",
+		bikeId: "SZ700",
+		bookingDates: "June 10 - June 12, 2025",
+		price: "₹6000",
 	},
 ];
 
@@ -104,7 +119,6 @@ const fetchAdminBookingsAPI = async (filters: {
 			if (filters.status && filters.status !== "All") {
 				bookings = bookings.filter((b) => b.status === filters.status);
 			}
-			// TODO: Implement otherFilters (from header filter icon)
 			resolve([...bookings]);
 		}, 300);
 	});
@@ -127,10 +141,10 @@ const cancelBookingAPI = async (
 };
 // --- End Dummy Data ---
 
-// --- Reusable Components (Inline) ---
+// --- Reusable Components (Themed) ---
 interface FilterTabButtonProps {
 	label: string;
-	count: number;
+	count?: number; // Made count optional as it might not always be available or needed
 	isActive: boolean;
 	onPress: () => void;
 }
@@ -152,7 +166,7 @@ const FilterTabButton: React.FC<FilterTabButtonProps> = ({
 				styles.filterTabButtonText,
 				isActive && styles.filterTabButtonTextActive,
 			]}>
-			{label} ({count})
+			{label} {typeof count === "number" ? `(${count})` : ""}
 		</Text>
 	</TouchableOpacity>
 );
@@ -167,43 +181,77 @@ const AdminBookingCard: React.FC<AdminBookingCardProps> = ({
 	onViewDetails,
 	onCancel,
 }) => {
-	const statusStyles = {
-		Active: {
-			badge: styles.statusBadgeActive,
-			text: styles.statusTextActive,
-		},
-		Completed: {
-			badge: styles.statusBadgeCompleted,
-			text: styles.statusTextCompleted,
-		},
-		Cancelled: {
-			badge: styles.statusBadgeCancelled,
-			text: styles.statusTextCancelled,
-		},
+	const userPhotoPlaceholder =
+		"https://placehold.co/40x40/1A1A1A/F5F5F5?text=U";
+
+	const getStatusStyleInfo = (
+		status: Exclude<BookingStatusAdmin, "All" | "Upcoming">
+	): {
+		badge: object;
+		text: object;
+		iconName: keyof typeof MaterialIcons.glyphMap;
+	} => {
+		switch (status) {
+			case "Active":
+				return {
+					badge: styles.statusBadgeActive,
+					text: styles.statusTextSemantic,
+					iconName: "play-circle-filled",
+				};
+			case "Completed":
+				return {
+					badge: styles.statusBadgeCompleted,
+					text: styles.statusTextMuted,
+					iconName: "check-circle",
+				};
+			case "Cancelled":
+				return {
+					badge: styles.statusBadgeCancelled,
+					text: styles.statusTextSemantic,
+					iconName: "cancel",
+				};
+		}
 	};
-	const currentStatusStyle = statusStyles[item.status] || {
-		badge: {},
-		text: {},
-	};
+	const currentStatusInfo = getStatusStyleInfo(
+		item.status === "Upcoming" ? "Active" : item.status
+	); // Map upcoming to active style for now or create separate for "Upcoming"
 
 	return (
-		<View style={styles.bookingCard}>
+		<TouchableOpacity
+			style={styles.bookingCard}
+			onPress={onViewDetails}
+			activeOpacity={0.8}>
 			<View style={styles.cardTopRow}>
 				<View style={styles.userDetails}>
 					<Image
-						source={
-							item.userPhotoUrl
-								? { uri: item.userPhotoUrl }
-								: require("../../../assets/images/icon.png")
-						}
+						source={{
+							uri: item.userPhotoUrl || userPhotoPlaceholder,
+						}}
 						style={styles.userPhoto}
 					/>
-					<Text style={styles.userName} numberOfLines={1}>
-						{item.userName}
-					</Text>
+					<View style={styles.userNameContainer}>
+						<Text style={styles.userName} numberOfLines={1}>
+							{item.userName}
+						</Text>
+						<Text style={styles.bookingIdText}>
+							ID: #{item.id.slice(-6).toUpperCase()}
+						</Text>
+					</View>
 				</View>
-				<View style={[styles.statusBadge, currentStatusStyle.badge]}>
-					<Text style={[styles.statusText, currentStatusStyle.text]}>
+				<View style={[styles.statusBadge, currentStatusInfo.badge]}>
+					<MaterialIcons
+						name={currentStatusInfo.iconName}
+						size={14}
+						color={
+							item.status === "Completed" ||
+							item.status === "Cancelled"
+								? colors.textSecondary
+								: colors.white
+						}
+						style={{ marginRight: spacing.xs }}
+					/>
+					<Text
+						style={[styles.statusTextBase, currentStatusInfo.text]}>
 						{item.status}
 					</Text>
 				</View>
@@ -211,12 +259,18 @@ const AdminBookingCard: React.FC<AdminBookingCardProps> = ({
 
 			<View style={styles.bikeInfoSection}>
 				<Text style={styles.bikeName}>
-					{item.bikeName}
-					<Text style={styles.bikeIdText}>({item.bikeId})</Text>
+					{item.bikeName}{" "}
+					<Text style={styles.bikeIdText}>
+						(Bike ID: {item.bikeId})
+					</Text>
 				</Text>
 				<View style={styles.dateRow}>
-					{/* <Icon name="calendar-month-outline" size={16} color={colors.textMedium} /> */}
-					<Text style={styles.detailIcon}>🗓️</Text>
+					<MaterialIcons
+						name="date-range"
+						size={16}
+						color={colors.iconDefault}
+						style={styles.detailIconThemed}
+					/>
 					<Text style={styles.bikeDetailText}>
 						{item.bookingDates}
 					</Text>
@@ -225,10 +279,14 @@ const AdminBookingCard: React.FC<AdminBookingCardProps> = ({
 
 			{item.assignedAdminName && (
 				<View style={styles.assignedInfoSection}>
-					{/* <Image source={item.adminPhotoUrl ? { uri: item.adminPhotoUrl } : require('../../../assets/placeholder_admin.png')} style={styles.adminPhoto} /> */}
-					<Text style={styles.detailIcon}>🧑‍💼</Text>
+					<MaterialIcons
+						name="admin-panel-settings"
+						size={16}
+						color={colors.iconDefault}
+						style={styles.detailIconThemed}
+					/>
 					<Text style={styles.assignedAdminText}>
-						Assigned: {item.assignedAdminName}
+						Managed by: {item.assignedAdminName}
 					</Text>
 				</View>
 			)}
@@ -238,11 +296,20 @@ const AdminBookingCard: React.FC<AdminBookingCardProps> = ({
 				<View style={styles.actionButtonsContainer}>
 					{item.status === "Active" && onCancel && (
 						<TouchableOpacity
-							style={[styles.actionButton, styles.cancelButton]}
+							style={[
+								styles.actionButtonSmall,
+								styles.cancelButton,
+							]}
 							onPress={onCancel}>
+							<MaterialIcons
+								name="cancel"
+								size={16}
+								color={colors.error}
+								style={{ marginRight: spacing.xs }}
+							/>
 							<Text
 								style={[
-									styles.actionButtonText,
+									styles.actionButtonTextSmall,
 									styles.cancelButtonText,
 								]}>
 								Cancel
@@ -250,50 +317,54 @@ const AdminBookingCard: React.FC<AdminBookingCardProps> = ({
 						</TouchableOpacity>
 					)}
 					<TouchableOpacity
-						style={[styles.actionButton, styles.viewDetailsButton]}
+						style={[
+							styles.actionButtonSmall,
+							styles.viewDetailsButton,
+						]}
 						onPress={onViewDetails}>
 						<Text
 							style={[
-								styles.actionButtonText,
+								styles.actionButtonTextSmall,
 								styles.viewDetailsButtonText,
 							]}>
-							View Details
+							Details
 						</Text>
+						<MaterialIcons
+							name="chevron-right"
+							size={20}
+							color={colors.buttonPrimaryText}
+						/>
 					</TouchableOpacity>
 				</View>
 			</View>
-		</View>
+		</TouchableOpacity>
 	);
 };
-// --- End Reusable Components ---
 
 type ScreenNavigationProp = StackNavigationProp<
 	AdminStackParamList,
 	"AdminManageBookings"
 >;
-// type ScreenRouteProp = RouteProp<AdminStackParamList, 'AdminManageBookings'>; // If using initialFilter
+type ScreenRouteProp = RouteProp<AdminStackParamList, "AdminManageBookings">; // If using initialFilter from route params
 
 interface AdminManageBookingsScreenProps {
-	navigation: ScreenNavigationProp;
-	// route: ScreenRouteProp;
-}
+	navigation: ScreenNavigationProp /* route: ScreenRouteProp; */;
+} // Route prop commented out as not used
 
 const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 	navigation /*, route*/,
 }) => {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [activeStatusFilter, setActiveStatusFilter] =
-		useState<BookingStatusAdmin>("All");
+		useState<BookingStatusAdmin>("All"); // Default to 'All'
 	const [bookings, setBookings] = useState<BookingAdminView[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
-	// const initialFilterFromRoute = route.params?.initialFilter;
-
-	// Counts for tabs (would come from API in real app)
 	const [counts, setCounts] = useState({
-		All: 24,
-		Active: 12,
-		Completed: 8,
-		Cancelled: 4,
+		All: 0,
+		Active: 0,
+		Upcoming: 0,
+		Completed: 0,
+		Cancelled: 0,
 	});
 
 	const loadBookings = useCallback(
@@ -304,11 +375,17 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 				searchQuery: query,
 			});
 			setBookings(fetchedBookings);
-			// In a real app, counts would be updated from API response meta or separate call
-			const newCounts = { All: 0, Active: 0, Completed: 0, Cancelled: 0 };
+			const newCounts = {
+				All: 0,
+				Active: 0,
+				Upcoming: 0,
+				Completed: 0,
+				Cancelled: 0,
+			};
 			DUMMY_ADMIN_BOOKINGS.forEach((b) => {
+				// Counts based on full dummy data
 				newCounts.All++;
-				newCounts[b.status]++;
+				if (b.status !== "All") newCounts[b.status]++;
 			});
 			setCounts(newCounts);
 			setIsLoading(false);
@@ -317,19 +394,14 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 	);
 
 	useEffect(() => {
-		// const initialStatus = initialFilterFromRoute || 'All';
-		// setActiveStatusFilter(initialStatus);
 		loadBookings(activeStatusFilter, searchQuery);
-	}, [
-		activeStatusFilter,
-		searchQuery,
-		loadBookings /*, initialFilterFromRoute*/,
-	]);
+	}, [activeStatusFilter, searchQuery, loadBookings]);
 
 	const navigateToAdvancedFilters = () => {
-		console.log("Navigate to Advanced Booking Filters");
-		// navigation.navigate('AdminBookingFilterModal', { currentFilters: { status: activeStatusFilter, query: searchQuery } });
-		Alert.alert("Filter", "Advanced filter modal to be implemented.");
+		Alert.alert(
+			"Filter Bookings",
+			"Advanced booking filter modal to be implemented."
+		);
 	};
 
 	useLayoutEffect(() => {
@@ -338,16 +410,21 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 			headerRight: () => (
 				<TouchableOpacity
 					onPress={navigateToAdvancedFilters}
-					style={styles.headerFilterButton}>
-					{/* <Icon name="filter-variant" size={22} color={colors.primary} /> */}
-					<Text style={styles.headerFilterIcon}>⚖️</Text>
-					<Text style={styles.headerFilterLabel}>
-						{activeStatusFilter}
-					</Text>
+					style={styles.headerActionButton}>
+					<MaterialIcons
+						name="filter-list"
+						size={24}
+						color={colors.iconWhite}
+					/>
+					{activeStatusFilter !== "All" && (
+						<Text style={styles.headerFilterLabelActive}>
+							{activeStatusFilter}
+						</Text>
+					)}
 				</TouchableOpacity>
 			),
 		});
-	}, [navigation, activeStatusFilter]); // Re-render header if activeStatusFilter changes label
+	}, [navigation, activeStatusFilter]);
 
 	const handleViewDetails = (bookingId: string) => {
 		navigation.navigate("AdminBookingDetails", { bookingId });
@@ -382,52 +459,68 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 		);
 	};
 
-	const filterTabs: { label: BookingStatusAdmin; count: number }[] = [
-		{ label: "All", count: counts.All },
-		{ label: "Active", count: counts.Active },
-		{ label: "Completed", count: counts.Completed },
-		// Add 'Cancelled' if needed based on design for tabs, prompt mentions it for badges
+	const filterTabs: {
+		label: BookingStatusAdmin;
+		countKey: keyof typeof counts;
+	}[] = [
+		{ label: "All", countKey: "All" },
+		{ label: "Active", countKey: "Active" },
+		{ label: "Upcoming", countKey: "Upcoming" },
+		{ label: "Completed", countKey: "Completed" },
+		{ label: "Cancelled", countKey: "Cancelled" },
 	];
 
 	if (isLoading && bookings.length === 0) {
 		return (
 			<View style={styles.centered}>
-				<Text>Loading bookings...</Text>
+				<ActivityIndicator size="large" color={colors.primary} />
+				<Text style={styles.loadingText}>Loading bookings...</Text>
 			</View>
 		);
 	}
 
 	return (
 		<View style={styles.screenContainer}>
-			{/* Search Bar */}
 			<View style={styles.searchBarContainer}>
 				<TextInput
 					style={styles.searchInput}
-					placeholder="Search by name, ID or bike..."
+					placeholder="Search by User, Booking ID or Bike..."
 					value={searchQuery}
 					onChangeText={setSearchQuery}
 					placeholderTextColor={colors.textPlaceholder}
 					returnKeyType="search"
 				/>
 			</View>
-
-			{/* Tab Filter Bar */}
 			<View style={styles.tabFilterContainer}>
-				{filterTabs.map((tab) => (
-					<FilterTabButton
-						key={tab.label}
-						label={tab.label}
-						count={tab.count}
-						isActive={activeStatusFilter === tab.label}
-						onPress={() => setActiveStatusFilter(tab.label)}
-					/>
-				))}
+				<ScrollView
+					horizontal
+					showsHorizontalScrollIndicator={false}
+					contentContainerStyle={{ paddingHorizontal: spacing.m }}>
+					{filterTabs.map((tab) => (
+						<FilterTabButton
+							key={tab.label}
+							label={tab.label}
+							count={counts[tab.countKey]}
+							isActive={activeStatusFilter === tab.label}
+							onPress={() => setActiveStatusFilter(tab.label)}
+						/>
+					))}
+				</ScrollView>
 			</View>
 
 			{bookings.length === 0 && !isLoading ? (
 				<View style={styles.centered}>
+					<MaterialIcons
+						name="event-busy"
+						size={48}
+						color={colors.textDisabled}
+					/>
 					<Text style={styles.noResultsText}>
-						No bookings match your criteria.
+						No{" "}
+						{activeStatusFilter !== "All"
+							? activeStatusFilter.toLowerCase()
+							: ""}{" "}
+						bookings found.
 					</Text>
 				</View>
 			) : (
@@ -438,7 +531,8 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 							item={item}
 							onViewDetails={() => handleViewDetails(item.id)}
 							onCancel={
-								item.status === "Active"
+								item.status === "Active" ||
+								item.status === "Upcoming"
 									? () => handleCancelBooking(item.id)
 									: undefined
 							}
@@ -447,9 +541,15 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 					keyExtractor={(item) => item.id}
 					contentContainerStyle={styles.listContentContainer}
 					showsVerticalScrollIndicator={false}
-					refreshing={isLoading}
-					onRefresh={() =>
-						loadBookings(activeStatusFilter, searchQuery)
+					refreshControl={
+						<RefreshControl
+							refreshing={isLoading}
+							onRefresh={() =>
+								loadBookings(activeStatusFilter, searchQuery)
+							}
+							tintColor={colors.primary}
+							colors={[colors.primary]}
+						/>
 					}
 				/>
 			)}
@@ -457,104 +557,107 @@ const AdminManageBookingsScreen: React.FC<AdminManageBookingsScreenProps> = ({
 	);
 };
 
-// Define your blue accent color in theme/colors.ts e.g. colors.adminAccentBlue
-const adminBlue = colors.primary; // Using primary green for now, change to blue
-const adminBlueLight = colors.primaryLight;
-
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundLight || "#F7F9FC",
+		backgroundColor: colors.backgroundMain,
 	},
 	centered: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.l,
+		backgroundColor: colors.backgroundMain,
 	},
-	headerFilterButton: {
+	loadingText: {
+		marginTop: spacing.m,
+		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+	},
+	headerActionButton: {
 		flexDirection: "row",
 		alignItems: "center",
 		marginRight: spacing.m,
 		padding: spacing.xs,
 	},
-	headerFilterIcon: {
-		fontSize: 18,
-		color: adminBlue,
-		marginRight: spacing.xs,
-	},
-	headerFilterLabel: {
+	headerFilterLabelActive: {
+		marginLeft: spacing.xs,
 		fontSize: typography.fontSizes.s,
-		color: adminBlue,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+		color: colors.primary, // Use primary accent for active filter label in header
 	},
 	searchBarContainer: {
 		paddingHorizontal: spacing.m,
-		paddingTop: spacing.m,
+		paddingTop: spacing.s,
 		paddingBottom: spacing.s,
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard,
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
+		borderBottomColor: colors.borderDefault,
 	},
 	searchInput: {
-		backgroundColor: colors.backgroundLight || "#F0F3F7",
+		backgroundColor: colors.backgroundInput,
 		borderRadius: borderRadius.m,
 		paddingHorizontal: spacing.m,
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		height: 44,
 		color: colors.textPrimary,
 	},
 	tabFilterContainer: {
 		flexDirection: "row",
-		backgroundColor: colors.white,
-		paddingHorizontal: spacing.s,
-		paddingVertical: spacing.s,
+		backgroundColor: colors.backgroundCard,
+		paddingVertical: spacing.xs,
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#EEE",
-		marginBottom: spacing.xs,
+		borderBottomColor: colors.borderDefault,
 	},
 	filterTabButton: {
 		paddingVertical: spacing.s,
 		paddingHorizontal: spacing.m,
-		borderRadius: borderRadius.pill,
+		borderRadius: borderRadius.m,
 		marginRight: spacing.s,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
+		backgroundColor: colors.backgroundCardOffset,
 	},
-	filterTabButtonActive: { backgroundColor: adminBlueLight },
+	filterTabButtonActive: {
+		backgroundColor: colors.primaryMuted, // Muted primary for active tab
+		borderColor: colors.primary,
+	},
 	filterTabButtonText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+		color: colors.textSecondary,
 	},
 	filterTabButtonTextActive: {
-		color: adminBlue,
-		fontWeight: typography.fontWeights.bold,
+		color: colors.primary, // Primary color for active text
+		fontFamily: typography.primarySemiBold,
 	},
 	listContentContainer: {
 		paddingHorizontal: spacing.m,
-		paddingTop: spacing.s,
+		paddingTop: spacing.m,
 		paddingBottom: spacing.l,
 	},
 	noResultsText: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
+		textAlign: "center",
+		marginTop: spacing.xl,
 	},
-	// AdminBookingCard Styles
 	bookingCard: {
-		backgroundColor: colors.white,
-		borderRadius: borderRadius.m,
+		backgroundColor: colors.backgroundCard,
+		borderRadius: borderRadius.l,
 		padding: spacing.m,
 		marginBottom: spacing.m,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 3,
-		elevation: 2,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	cardTopRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "flex-start",
-		marginBottom: spacing.s,
+		marginBottom: spacing.m,
 	},
 	userDetails: {
 		flexDirection: "row",
@@ -565,77 +668,85 @@ const styles = StyleSheet.create({
 	userPhoto: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: borderRadius.circle,
 		marginRight: spacing.s,
-		backgroundColor: colors.greyLighter,
+		backgroundColor: colors.borderDefault,
+	},
+	userNameContainer: {
+		// To stack name and booking ID
+		flex: 1,
 	},
 	userName: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
 		color: colors.textPrimary,
 	},
-	statusBadge: {
-		paddingHorizontal: spacing.s,
-		paddingVertical: spacing.xxs + 1,
-		borderRadius: borderRadius.pill,
-	},
-	statusText: {
+	bookingIdText: {
 		fontSize: typography.fontSizes.xs,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.white,
-	}, // Default, overridden by specific status
-	statusBadgeActive: { backgroundColor: "#D4EFDF" },
-	statusTextActive: { color: "#1D8348" },
-	statusBadgeCompleted: { backgroundColor: "#D6EAF8" },
-	statusTextCompleted: { color: "#1A5276" },
-	statusBadgeCancelled: { backgroundColor: colors.greyLighter || "#EAECEE" },
-	statusTextCancelled: { color: colors.textMedium || "#707B7C" }, // Grey for cancelled
+		fontFamily: typography.primaryRegular,
+		color: colors.textPlaceholder,
+	},
+	statusBadge: {
+		paddingHorizontal: spacing.m,
+		paddingVertical: spacing.s - spacing.xxs,
+		borderRadius: borderRadius.pill,
+		flexDirection: "row",
+		alignItems: "center",
+		minWidth: 90,
+		justifyContent: "center",
+	},
+	statusTextBase: {
+		fontSize: typography.fontSizes.xs,
+		fontFamily: typography.primaryBold,
+		textTransform: "capitalize",
+	},
+	statusBadgeActive: { backgroundColor: colors.successMuted },
+	statusBadgeUpcoming: { backgroundColor: colors.infoMuted }, // Define if not present
+	statusBadgeCompleted: { backgroundColor: colors.backgroundDisabled },
+	statusBadgeCancelled: { backgroundColor: colors.errorMuted },
+	statusTextSemantic: { color: colors.white },
+	statusTextMuted: { color: colors.textSecondary },
+
 	bikeInfoSection: {
 		marginVertical: spacing.s,
-		paddingLeft: spacing.s,
-		borderLeftWidth: 3,
-		borderLeftColor: colors.borderDefault || "#EEE",
+		paddingLeft: spacing.xs,
 	},
 	bikeName: {
 		fontSize: typography.fontSizes.m,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
 		color: colors.textPrimary,
+		marginBottom: spacing.xxs,
 	},
 	bikeIdText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textPlaceholder,
 	},
 	dateRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		marginTop: spacing.xs,
 	},
-	detailIcon: {
-		fontSize: 14,
-		color: colors.textMedium,
-		marginRight: spacing.xs,
+	detailIconThemed: {
+		marginRight: spacing.s,
 	},
 	bikeDetailText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textMedium,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary,
 	},
 	assignedInfoSection: {
 		flexDirection: "row",
 		alignItems: "center",
 		marginTop: spacing.s,
-		paddingLeft: spacing.s,
-	},
-	adminPhoto: {
-		width: 20,
-		height: 20,
-		borderRadius: 10,
-		marginRight: spacing.xs,
-		backgroundColor: colors.greyLighter,
+		paddingTop: spacing.s,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderTopColor: colors.borderDefault,
 	},
 	assignedAdminText: {
 		fontSize: typography.fontSizes.s,
-		color: colors.textSecondary,
-		fontStyle: "italic",
+		fontFamily: typography.primaryRegularItalic,
+		color: colors.textPlaceholder,
 	},
 	priceAndActionsRow: {
 		flexDirection: "row",
@@ -643,29 +754,46 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		marginTop: spacing.m,
 		borderTopWidth: StyleSheet.hairlineWidth,
-		borderTopColor: colors.borderDefault || "#F0F0F0",
+		borderTopColor: colors.borderDefault,
 		paddingTop: spacing.m,
 	},
 	priceText: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.bold,
-		color: colors.textPrimary,
+		fontFamily: typography.primaryBold,
+		color: colors.primary,
 	},
 	actionButtonsContainer: { flexDirection: "row", alignItems: "center" },
-	actionButton: {
-		borderRadius: borderRadius.s,
-		paddingVertical: spacing.s - 2,
+	actionButtonSmall: {
+		// For smaller buttons like Cancel/Details in card
+		borderRadius: borderRadius.m,
+		paddingVertical: spacing.xs + 2,
 		paddingHorizontal: spacing.m,
 		marginLeft: spacing.s,
+		flexDirection: "row",
+		alignItems: "center",
 	},
-	actionButtonText: {
-		fontSize: typography.fontSizes.s,
-		fontWeight: typography.fontWeights.medium,
+	actionButtonTextSmall: {
+		fontSize: typography.fontSizes.xs, // Smaller text for these actions
+		fontFamily: typography.primaryMedium,
 	},
-	viewDetailsButton: { backgroundColor: adminBlue },
-	viewDetailsButtonText: { color: colors.white },
-	cancelButton: { borderWidth: 1, borderColor: colors.error },
-	cancelButtonText: { color: colors.error },
+	viewDetailsButton: {
+		// For TouchableOpacity
+		backgroundColor: colors.primary,
+	},
+	viewDetailsButtonText: {
+		color: colors.buttonPrimaryText,
+		marginRight: spacing.xxs, // Space before chevron
+	},
+	cancelButton: {
+		// For TouchableOpacity
+		borderWidth: 1.5,
+		borderColor: colors.error,
+		backgroundColor: colors.backgroundCard, // Keep card background for outline
+	},
+	cancelButtonText: {
+		color: colors.error,
+	},
+	// Removed adminAccentColor and adminAccentColorLight variables
 });
 
 export default AdminManageBookingsScreen;

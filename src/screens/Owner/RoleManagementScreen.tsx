@@ -13,26 +13,27 @@ import {
 	Keyboard,
 	Modal,
 	Platform,
+	RefreshControl,
 	StyleSheet,
 	Text,
 	TextInput,
 	TouchableOpacity,
 	View,
 } from "react-native";
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // For icons
 import { useDispatch, useSelector } from "react-redux";
-import PrimaryButton from "../../components/common/PrimaryButton";
-import { User } from "../../store/slices/authSlice"; // This is the TYPE import
+import PrimaryButton from "../../components/common/PrimaryButton"; // Assumed themed
+import { User } from "../../store/slices/authSlice";
 import {
 	FetchUsersParamsOwner,
 	clearOwnerUserManagementErrors,
 	fetchUsersForOwnerThunk,
 	setCurrentFilters,
 	updateUserRoleByOwnerThunk,
-} from "../../store/slices/ownerUserManagementSlice"; // Ensure this path is correct
+} from "../../store/slices/ownerUserManagementSlice";
 import { AppDispatch, RootState } from "../../store/store";
 import { borderRadius, colors, spacing, typography } from "../../theme";
 
-// ... (UserCard component definition) ...
 interface UserListItemDisplay extends User {
 	registrationDateFormatted: string;
 }
@@ -46,12 +47,14 @@ const UserCard: React.FC<{
 			<View style={styles.userInfoRow}>
 				<View style={styles.avatarPlaceholder}>
 					<Text style={styles.avatarText}>
-						{item.fullName.substring(0, 1).toUpperCase()}
+						{item.fullName
+							? item.fullName.substring(0, 1).toUpperCase()
+							: "U"}
 					</Text>
 				</View>
 				<View style={styles.userDetails}>
 					<Text style={styles.userName} numberOfLines={1}>
-						{item.fullName}
+						{item.fullName || "N/A"}
 					</Text>
 					<Text style={styles.userEmail} numberOfLines={1}>
 						{item.email}
@@ -69,6 +72,12 @@ const UserCard: React.FC<{
 				<TouchableOpacity
 					style={styles.actionButton}
 					onPress={() => onEditRole(item)}>
+					<MaterialIcons
+						name="edit"
+						size={16}
+						color={colors.buttonPrimaryText}
+						style={{ marginRight: spacing.xs }}
+					/>
 					<Text style={styles.actionButtonText}>Edit Role</Text>
 				</TouchableOpacity>
 			</View>
@@ -76,23 +85,27 @@ const UserCard: React.FC<{
 	);
 };
 
+// Props for RoleManagementScreen are not explicitly defined, assuming navigation is passed
+interface RoleManagementScreenProps {
+	navigation: any; // Replace 'any' with specific navigation prop type if available
+}
+
 const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 	navigation,
 }) => {
 	const dispatch = useDispatch<AppDispatch>();
 	const {
-		users, // <<< THIS MUST BE 'users' (lowercase)
+		users,
 		pagination,
 		isLoading,
 		error,
 		isUpdatingRole,
 		updateRoleError,
 		currentFilters,
-	} = useSelector((state: RootState) => state.ownerUserManagement); // Ensure this slice exists in RootState
+	} = useSelector((state: RootState) => state.ownerUserManagement);
 
-	// ... (rest of your component logic from the previous correct version)
 	const [localSearchQuery, setLocalSearchQuery] = useState(
-		currentFilters?.search || "" // Add nullish coalescing for safety if currentFilters can be undefined initially
+		currentFilters?.search || ""
 	);
 	const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(
 		currentFilters?.search || ""
@@ -100,7 +113,6 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 	const [selectedRoleFilter, setSelectedRoleFilter] = useState<
 		"all" | "User" | "Owner" | "Admin"
 	>(currentFilters?.role || "all");
-
 	const [isRoleModalVisible, setIsRoleModalVisible] = useState(false);
 	const [selectedUserForRoleChange, setSelectedUserForRoleChange] =
 		useState<UserListItemDisplay | null>(null);
@@ -108,7 +120,6 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 		"User" | "Owner" | "Admin"
 	>("User");
 
-	// Debounce search query
 	useEffect(() => {
 		const handler = setTimeout(() => {
 			setDebouncedSearchQuery(localSearchQuery);
@@ -116,10 +127,9 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 		return () => clearTimeout(handler);
 	}, [localSearchQuery]);
 
-	// Effect to update filters in Redux store
 	useEffect(() => {
 		const newFilters: FetchUsersParamsOwner = {
-			page: 1,
+			page: 1, // Always reset to page 1 when filters change
 			limit: currentFilters?.limit || 15,
 			search: debouncedSearchQuery.trim() || undefined,
 			role: selectedRoleFilter === "all" ? undefined : selectedRoleFilter,
@@ -127,25 +137,21 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 		// Only dispatch if filters actually change to avoid potential loops
 		if (
 			JSON.stringify(newFilters) !==
-			JSON.stringify({
-				...(currentFilters || {}),
-				page: 1,
-				limit: currentFilters?.limit || 15,
-			})
+			JSON.stringify({ ...currentFilters, page: 1 })
 		) {
 			dispatch(setCurrentFilters(newFilters));
 		}
-	}, [
-		debouncedSearchQuery,
-		selectedRoleFilter,
-		dispatch,
-		currentFilters?.limit,
-	]);
+	}, [debouncedSearchQuery, selectedRoleFilter, dispatch, currentFilters]);
 
 	const loadUsers = useCallback(
-		(pageToLoad: number) => {
-			// Ensure currentFilters is defined before spreading
+		(pageToLoad: number, isRefreshing = false) => {
 			if (currentFilters) {
+				if (
+					!isRefreshing &&
+					isLoading &&
+					(currentFilters.page || 1) === pageToLoad
+				)
+					return; // Avoid re-fetch if already loading same page
 				dispatch(
 					fetchUsersForOwnerThunk({
 						...currentFilters,
@@ -153,7 +159,7 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 					})
 				);
 			} else {
-				// Fallback or initial fetch if currentFilters is not yet set (should be set by setCurrentFilters)
+				// Fallback if currentFilters is somehow not set (should be initialized)
 				dispatch(
 					fetchUsersForOwnerThunk({
 						page: pageToLoad,
@@ -167,16 +173,20 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 				);
 			}
 		},
-		[dispatch, currentFilters, selectedRoleFilter, debouncedSearchQuery]
-	); // currentFilters will change, triggering the next useEffect
+		[
+			dispatch,
+			currentFilters,
+			isLoading,
+			selectedRoleFilter,
+			debouncedSearchQuery,
+		]
+	); // Added isLoading to deps
 
-	// Effect to fetch users whenever currentFilters from Redux changes
 	useEffect(() => {
 		if (currentFilters) {
-			// Ensure currentFilters is defined
 			loadUsers(currentFilters.page || 1);
 		}
-	}, [currentFilters, loadUsers]); // loadUsers is memoized
+	}, [currentFilters]); // Removed loadUsers from here to break potential loop
 
 	useLayoutEffect(() => {
 		navigation.setOptions({ title: "User Role Management" });
@@ -187,7 +197,7 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 
 	const handleEditRolePress = (user: UserListItemDisplay) => {
 		setSelectedUserForRoleChange(user);
-		setNewRoleForSelectedUser(user.role as "User" | "Owner" | "Admin");
+		setNewRoleForSelectedUser(user.role as "User" | "Owner" | "Admin"); // Pre-fill with current role
 		setIsRoleModalVisible(true);
 	};
 
@@ -198,10 +208,19 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 			return;
 		}
 		Keyboard.dismiss();
+		console.log("--- Frontend: Preparing to change role ---");
+		console.log(
+			"Selected User Object:",
+			JSON.stringify(selectedUserForRoleChange, null, 2)
+		);
+		console.log(
+			"User ID being sent to thunk:",
+			selectedUserForRoleChange._id
+		); // <<< CHECK THIS ID (should be _id from Mongoose)
 		try {
 			await dispatch(
 				updateUserRoleByOwnerThunk({
-					userId: selectedUserForRoleChange.id,
+					userId: selectedUserForRoleChange._id, // Use _id from User type
 					newRole: newRoleForSelectedUser,
 				})
 			).unwrap();
@@ -211,6 +230,7 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 			);
 			setIsRoleModalVisible(false);
 			setSelectedUserForRoleChange(null);
+			// The list will refresh due to `fetchUsersForOwnerThunk` being called on success inside `updateUserRoleByOwnerThunk`
 		} catch (rejectedValueOrSerializedError) {
 			Alert.alert(
 				"Error",
@@ -222,12 +242,15 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 
 	const mappedUsers: UserListItemDisplay[] =
 		users?.map((user) => ({
-			// Add optional chaining for users
 			...user,
 			registrationDateFormatted: user.createdAt
-				? new Date(user.createdAt).toLocaleDateString()
+				? new Date(user.createdAt).toLocaleDateString("en-GB", {
+						day: "2-digit",
+						month: "short",
+						year: "numeric",
+				  })
 				: "N/A",
-		})) || []; // Default to empty array if users is undefined
+		})) || [];
 
 	const handleLoadMore = () => {
 		if (
@@ -237,14 +260,13 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 			!isLoading
 		) {
 			const nextPage = currentFilters.page + 1;
-			dispatch(setCurrentFilters({ ...currentFilters, page: nextPage }));
+			dispatch(setCurrentFilters({ ...currentFilters, page: nextPage })); // This will trigger useEffect for loadUsers
 		}
 	};
 	const onRefresh = () => {
 		if (currentFilters) {
 			dispatch(setCurrentFilters({ ...currentFilters, page: 1 }));
 		} else {
-			// Fallback if currentFilters somehow not set
 			dispatch(
 				setCurrentFilters({
 					page: 1,
@@ -280,9 +302,9 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 					placeholder="Search by name or email..."
 					value={localSearchQuery}
 					onChangeText={setLocalSearchQuery}
-					placeholderTextColor={colors.textPlaceholder}
+					placeholderTextColor={colors.textPlaceholder} // Themed placeholder
 					returnKeyType="search"
-					onBlur={() => setDebouncedSearchQuery(localSearchQuery)}
+					// onBlur={() => setDebouncedSearchQuery(localSearchQuery)} // Debounce handles this
 				/>
 				<View style={styles.pickerWrapper}>
 					<Picker
@@ -293,19 +315,60 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 							)
 						}
 						style={styles.rolePicker}
+						dropdownIconColor={colors.iconDefault} // For Android dropdown arrow
 						prompt="Filter by Role">
-						<Picker.Item label="All Roles" value="all" />
-						<Picker.Item label="Regular Users" value="User" />
-						<Picker.Item label="Owners" value="Owner" />
-						<Picker.Item label="Administrators" value="Admin" />
+						<Picker.Item
+							label="All Roles"
+							value="all"
+							color={
+								Platform.OS === "ios"
+									? colors.textPrimary
+									: undefined
+							}
+						/>
+						<Picker.Item
+							label="Regular Users"
+							value="User"
+							color={
+								Platform.OS === "ios"
+									? colors.textPrimary
+									: undefined
+							}
+						/>
+						<Picker.Item
+							label="Owners"
+							value="Owner"
+							color={
+								Platform.OS === "ios"
+									? colors.textPrimary
+									: undefined
+							}
+						/>
+						<Picker.Item
+							label="Administrators"
+							value="Admin"
+							color={
+								Platform.OS === "ios"
+									? colors.textPrimary
+									: undefined
+							}
+						/>
 					</Picker>
 				</View>
 			</View>
 
 			{error && (
-				<Text style={styles.errorText}>
-					Error fetching users: {error}
-				</Text>
+				<View style={styles.errorContainer}>
+					<MaterialIcons
+						name="error-outline"
+						size={20}
+						color={colors.error}
+						style={{ marginRight: spacing.s }}
+					/>
+					<Text style={styles.errorText}>
+						Error fetching users: {error}
+					</Text>
+				</View>
 			)}
 
 			<FlatList
@@ -313,11 +376,19 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 				renderItem={({ item }) => (
 					<UserCard item={item} onEditRole={handleEditRolePress} />
 				)}
-				keyExtractor={(item) => item.id}
+				keyExtractor={(item) => item._id} // Use _id from User type
 				contentContainerStyle={styles.listContentContainer}
 				showsVerticalScrollIndicator={false}
-				onRefresh={onRefresh}
-				refreshing={isLoading && (currentFilters?.page || 1) === 1}
+				refreshControl={
+					<RefreshControl
+						refreshing={
+							isLoading && (currentFilters?.page || 1) === 1
+						}
+						onRefresh={onRefresh}
+						tintColor={colors.primary} // For iOS
+						colors={[colors.primary]} // For Android
+					/>
+				}
 				onEndReached={handleLoadMore}
 				onEndReachedThreshold={0.5}
 				ListFooterComponent={
@@ -331,8 +402,13 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 				ListEmptyComponent={
 					!isLoading && !error ? (
 						<View style={styles.centered}>
+							<MaterialIcons
+								name="people-outline"
+								size={48}
+								color={colors.textDisabled}
+							/>
 							<Text style={styles.emptyListText}>
-								No users found.
+								No users found matching your criteria.
 							</Text>
 						</View>
 					) : null
@@ -350,7 +426,7 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 				<TouchableOpacity
 					style={styles.modalOverlay}
 					activeOpacity={1}
-					onPress={() => setIsRoleModalVisible(false)}>
+					onPressOut={() => setIsRoleModalVisible(false)}>
 					<TouchableOpacity
 						style={styles.modalContent}
 						activeOpacity={1}
@@ -370,6 +446,12 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 									)
 								}
 								style={styles.modalPicker}
+								itemStyle={
+									Platform.OS === "ios"
+										? styles.modalPickerItemIOS
+										: {}
+								} // For iOS item text color
+								dropdownIconColor={colors.iconDefault}
 								prompt="Select New Role">
 								<Picker.Item label="Set as User" value="User" />
 								<Picker.Item
@@ -396,7 +478,7 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 									Cancel
 								</Text>
 							</TouchableOpacity>
-							<PrimaryButton
+							<PrimaryButton // Assumed themed
 								title={
 									isUpdatingRole ? "Saving..." : "Save Role"
 								}
@@ -411,7 +493,7 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 									styles.modalButtonBase,
 									styles.modalButtonSave,
 								]}
-								textStyle={styles.modalButtonText}
+								textStyle={styles.modalButtonTextSave} // Ensure this contrasts with primary bg
 							/>
 						</View>
 						{updateRoleError && (
@@ -426,62 +508,68 @@ const RoleManagementScreen: React.FC<RoleManagementScreenProps> = ({
 	);
 };
 
-// Styles (Keep your existing styles)
 const styles = StyleSheet.create({
 	screenContainer: {
 		flex: 1,
-		backgroundColor: colors.backgroundMain || "#F4F6F8",
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
 	centered: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
 		padding: spacing.l,
+		backgroundColor: colors.backgroundMain, // Dark theme background
 	},
-	loadingText: { marginTop: spacing.s, color: colors.textMedium },
+	loadingText: {
+		marginTop: spacing.s,
+		color: colors.textSecondary, // Muted light text
+		fontFamily: typography.primaryRegular,
+	},
 	filterContainer: {
 		paddingHorizontal: spacing.m,
 		paddingTop: spacing.m,
 		paddingBottom: spacing.s,
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background for filters
 		borderBottomWidth: 1,
-		borderBottomColor: colors.borderDefault || "#E0E0E0",
+		borderBottomColor: colors.borderDefault, // Themed border
 	},
 	searchInput: {
-		backgroundColor: colors.backgroundLight,
+		backgroundColor: colors.backgroundInput, // Specific input background
 		paddingHorizontal: spacing.m,
-		paddingVertical: Platform.OS === "ios" ? spacing.m - 2 : spacing.s,
+		paddingVertical: Platform.OS === "ios" ? spacing.m - 2 : spacing.s + 2,
 		borderRadius: borderRadius.m,
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 		marginBottom: spacing.m,
 		borderWidth: 1,
-		borderColor: colors.borderDefault || "#DDD",
-		color: colors.textPrimary,
+		borderColor: colors.borderDefault,
+		color: colors.textPrimary, // Light text for input
 	},
 	pickerWrapper: {
-		backgroundColor: colors.backgroundLight,
+		backgroundColor: colors.backgroundInput, // Specific input background
 		borderRadius: borderRadius.m,
 		borderWidth: 1,
-		borderColor: colors.borderDefault || "#DDD",
-		height: Platform.OS === "ios" ? undefined : 50,
+		borderColor: colors.borderDefault,
+		height: Platform.OS === "ios" ? undefined : 50, // Android needs explicit height for Picker parent
 		justifyContent: "center",
 	},
 	rolePicker: {
-		height: Platform.OS === "ios" ? 120 : 50,
+		// For both iOS and Android Picker style
+		height: Platform.OS === "ios" ? 120 : 50, // iOS picker needs more height for wheel
 		width: "100%",
-		color: colors.textPrimary,
+		color: colors.textPrimary, // Light text for selected item
 	},
-	listContentContainer: { padding: spacing.m, flexGrow: 1 },
+	listContentContainer: {
+		padding: spacing.m,
+		flexGrow: 1,
+	},
 	userCard: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background
 		borderRadius: borderRadius.l,
 		padding: spacing.m,
 		marginBottom: spacing.m,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.08,
-		shadowRadius: 4,
-		elevation: 3,
+		borderWidth: 1, // Optional subtle border
+		borderColor: colors.borderDefault,
 	},
 	userInfoRow: {
 		flexDirection: "row",
@@ -491,114 +579,140 @@ const styles = StyleSheet.create({
 	avatarPlaceholder: {
 		width: 48,
 		height: 48,
-		borderRadius: 24,
-		backgroundColor: colors.primaryVeryLight,
+		borderRadius: borderRadius.circle, // Circular
+		backgroundColor: colors.primaryMuted, // Muted primary for avatar bg
 		justifyContent: "center",
 		alignItems: "center",
 		marginRight: spacing.m,
 	},
 	avatarText: {
 		fontSize: typography.fontSizes.l,
-		color: colors.primary,
-		fontWeight: "bold",
+		fontFamily: typography.primaryBold,
+		color: colors.primary, // Brighter primary for avatar text
 	},
 	userDetails: { flex: 1 },
 	userName: {
 		fontSize: typography.fontSizes.l,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
 		color: colors.textPrimary,
 	},
 	userEmail: {
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 		color: colors.textSecondary,
 		marginBottom: spacing.xs,
 	},
-	userMeta: { fontSize: typography.fontSizes.xs, color: colors.textMedium },
+	userMeta: {
+		fontSize: typography.fontSizes.xs,
+		fontFamily: typography.primaryRegular,
+		color: colors.textPlaceholder, // More muted for meta info
+	},
 	userRoleText: {
-		fontWeight: typography.fontWeights.semiBold,
-		color: colors.primaryDark,
+		fontFamily: typography.primarySemiBold,
+		color: colors.primary, // Accent color for role
 	},
 	userActions: {
 		flexDirection: "row",
 		justifyContent: "flex-end",
-		borderTopWidth: 1,
-		borderTopColor: colors.borderLight || "#EEEEEE",
+		borderTopWidth: StyleSheet.hairlineWidth, // Thinner border
+		borderTopColor: colors.borderDefault,
 		paddingTop: spacing.m,
 		marginTop: spacing.m,
 	},
 	actionButton: {
-		paddingVertical: spacing.xs + 2,
-		paddingHorizontal: spacing.l,
+		// For TouchableOpacity acting as a button
+		paddingVertical: spacing.s, // Smaller padding
+		paddingHorizontal: spacing.m,
 		borderRadius: borderRadius.m,
-		backgroundColor: colors.primary,
+		backgroundColor: colors.primary, // Themed primary color
+		flexDirection: "row",
+		alignItems: "center",
 	},
 	actionButtonText: {
-		color: colors.white,
+		color: colors.buttonPrimaryText, // Text color for primary button
 		fontSize: typography.fontSizes.s,
-		fontWeight: typography.fontWeights.medium,
+		fontFamily: typography.primaryMedium,
+	},
+	errorContainer: {
+		// Container for error message + icon
+		flexDirection: "row",
+		alignItems: "center",
+		paddingHorizontal: spacing.m,
+		paddingVertical: spacing.s,
+		// backgroundColor: colors.errorMuted, // Optional background for error section
+		// borderRadius: borderRadius.m,
+		// marginVertical: spacing.s,
 	},
 	errorText: {
-		color: colors.error,
-		textAlign: "center",
-		margin: spacing.m,
+		color: colors.textError,
+		// textAlign: "center", // Not needed if in flex row
+		// margin: spacing.m,
+		flex: 1,
 		fontSize: typography.fontSizes.m,
+		fontFamily: typography.primaryRegular,
 	},
 	errorTextModal: {
-		color: colors.error,
+		color: colors.textError,
 		textAlign: "center",
 		marginTop: spacing.s,
 		fontSize: typography.fontSizes.s,
+		fontFamily: typography.primaryRegular,
 	},
 	emptyListText: {
 		textAlign: "center",
-		color: colors.textMedium,
+		color: colors.textSecondary, // Muted light text
 		marginTop: spacing.xl,
 		fontSize: typography.fontSizes.m,
-		fontStyle: "italic",
+		fontFamily: typography.primaryRegular,
 	},
 	modalOverlay: {
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		backgroundColor: "rgba(0,0,0,0.6)",
+		backgroundColor: "rgba(0,0,0,0.7)", // Darker overlay
 	},
 	modalContent: {
-		backgroundColor: colors.white,
+		backgroundColor: colors.backgroundCard, // Dark card background for modal
 		borderRadius: borderRadius.xl,
 		padding: spacing.l,
 		width: "90%",
 		maxWidth: 400,
-		shadowColor: colors.black,
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.25,
-		shadowRadius: 4,
-		elevation: 5,
+		borderWidth: 1,
+		borderColor: colors.borderDefault,
 	},
 	modalTitle: {
 		fontSize: typography.fontSizes.xl,
-		fontWeight: typography.fontWeights.bold,
+		fontFamily: typography.primaryBold,
 		marginBottom: spacing.s,
 		textAlign: "center",
-		color: colors.textPrimary,
+		color: colors.textPrimary, // Light text
 	},
 	modalCurrentRole: {
 		fontSize: typography.fontSizes.m,
-		color: colors.textSecondary,
+		fontFamily: typography.primaryRegular,
+		color: colors.textSecondary, // Muted light text
 		textAlign: "center",
 		marginBottom: spacing.m,
 	},
 	modalPickerContainer: {
 		borderWidth: 1,
-		borderColor: colors.borderDefault,
+		borderColor: colors.borderDefault, // Themed border
 		borderRadius: borderRadius.m,
 		marginBottom: spacing.l,
+		backgroundColor: colors.backgroundInput, // Input background for picker container
 		height: Platform.OS === "ios" ? undefined : 50,
 		justifyContent: "center",
 	},
 	modalPicker: {
-		height: Platform.OS === "ios" ? 150 : 50,
+		// For both iOS and Android Picker style
+		height: Platform.OS === "ios" ? 180 : 50, // iOS picker needs more height
 		width: "100%",
-		color: colors.textPrimary,
+		color: colors.textPrimary, // Light text for selected item
+	},
+	modalPickerItemIOS: {
+		// Specific style for iOS Picker items
+		color: colors.textPrimary, // Ensure iOS picker items are light
+		// backgroundColor: colors.backgroundCard, // This might not work as expected for item bg
 	},
 	modalButtonRow: {
 		flexDirection: "row",
@@ -606,26 +720,33 @@ const styles = StyleSheet.create({
 		marginTop: spacing.s,
 	},
 	modalButtonBase: {
+		// Base for PrimaryButton and TouchableOpacity
 		flex: 1,
 		borderRadius: borderRadius.m,
 		paddingVertical: spacing.m,
 		alignItems: "center",
 	},
 	modalButtonCancel: {
-		backgroundColor: colors.greyLight,
+		// For TouchableOpacity
+		backgroundColor: colors.backgroundCardOffset, // Slightly different dark shade for cancel
 		marginRight: spacing.s,
 		borderWidth: 1,
-		borderColor: colors.greyMedium,
+		borderColor: colors.borderDefault,
 	},
-	modalButtonSave: { backgroundColor: colors.primary, marginLeft: spacing.s },
-	modalButtonText: {
-		color: colors.white,
-		fontWeight: typography.fontWeights.bold,
+	modalButtonSave: {
+		// For PrimaryButton instance
+		backgroundColor: colors.primary, // PrimaryButton handles its own color
+		marginLeft: spacing.s,
+	},
+	modalButtonTextSave: {
+		// For text within PrimaryButton if it accepts textStyle prop
+		color: colors.buttonPrimaryText,
+		fontFamily: typography.primaryBold,
 		fontSize: typography.fontSizes.m,
 	},
 	modalButtonTextCancel: {
-		color: colors.textSecondary,
-		fontWeight: typography.fontWeights.bold,
+		color: colors.textSecondary, // Muted light text for cancel
+		fontFamily: typography.primaryBold,
 		fontSize: typography.fontSizes.m,
 	},
 });

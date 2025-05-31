@@ -17,6 +17,7 @@ export interface AppliedFilters {
 	instantBooking?: boolean;
 }
 
+
 export type HomeStackParamList = {
 	HomeScreenRoot: undefined;
 	NotificationsScreen: undefined; // Changed name to avoid conflict if 'HomeScreen' is used elsewhere
@@ -168,7 +169,7 @@ export type WalletStackParamList = {
 	WalletPaymentsScreen: undefined; // Main screen for wallet
 	AddMoneyScreen: undefined; // For adding money to wallet
 	TransactionHistoryScreen: undefined; // For full transaction list
-	AddPaymentMethodScreen: undefined; 
+	AddPaymentMethodScreen: undefined;
 	// For adding new cards/UPI etc.
 	// ... other wallet related screens
 };
